@@ -9,6 +9,7 @@ import type {
   Role,
   TopicId,
 } from "../types";
+import { roles } from "./validation";
 export function emptyPortalState(): PortalState {
   return {
     profiles: [],
@@ -45,9 +46,7 @@ export function createPortalRepository(client: ApiClient) {
         !(
           result.user === null ||
           (typeof result.user?.id === "string" &&
-            ["Reader", "Reviewer", "Approver", "Admin"].includes(
-              result.user.role,
-            ))
+            roles.includes(result.user.role))
         )
       )
         throw new Error("The SciDA API returned incomplete portal data.");

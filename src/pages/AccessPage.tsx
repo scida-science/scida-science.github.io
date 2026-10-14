@@ -32,33 +32,76 @@ function TopicChoices({
   label: string;
   disabled?: boolean;
 }) {
+  const [selectedField, setSelectedField] = useState("");
+  const availableTopics = topics.filter((topic) => allowed.includes(topic.id));
+  const fields = [...new Set(availableTopics.map((topic) => topic.field))];
+  const field = fields.find((item) => item === selectedField) ?? "";
+  const selectedTopics = topics.filter((topic) => value.includes(topic.id));
   return (
     <fieldset disabled={disabled}>
       <legend>{label}</legend>
-      <div className="checkbox-list">
-        {topics
-          .filter((topic) => allowed.includes(topic.id))
-          .map((topic) => (
-            <label className="checkbox-row" key={topic.id}>
-              <input
-                type="checkbox"
-                checked={value.includes(topic.id)}
-                onChange={() =>
-                  onChange(
-                    value.includes(topic.id)
-                      ? value.filter((id) => id !== topic.id)
-                      : [...value, topic.id],
-                  )
-                }
-              />
-              <span>
-                {topic.label}
-                <span className="muted"> · {topic.field}</span>
-              </span>
-            </label>
-          ))}
-      </div>
-      {allowed.length === 0 && (
+      {fields.length > 0 && (
+        <label className="field">
+          Research field
+          <select
+            className="select"
+            aria-label={`Research field for ${label}`}
+            value={field}
+            onChange={(event) => setSelectedField(event.target.value)}
+          >
+            <option value="">Choose a research field</option>
+            {fields.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {field && (
+        <div className="checkbox-list">
+          {availableTopics
+            .filter((topic) => topic.field === field)
+            .map((topic) => (
+              <label className="checkbox-row" key={topic.id}>
+                <input
+                  type="checkbox"
+                  checked={value.includes(topic.id)}
+                  onChange={() =>
+                    onChange(
+                      value.includes(topic.id)
+                        ? value.filter((id) => id !== topic.id)
+                        : [...value, topic.id],
+                    )
+                  }
+                />
+                <span>
+                  {topic.label}
+                  <span className="muted"> · {topic.field}</span>
+                </span>
+              </label>
+            ))}
+        </div>
+      )}
+      {selectedTopics.length > 0 && (
+        <div className="stack" aria-label={`Selected ${label.toLowerCase()}`}>
+          <span className="muted">Selected topics</span>
+          <div className="button-row">
+            {selectedTopics.map((topic) => (
+              <button
+                className="btn btn-secondary"
+                type="button"
+                key={topic.id}
+                aria-label={`Remove ${topic.label} from ${label.toLowerCase()}`}
+                onClick={() => onChange(value.filter((id) => id !== topic.id))}
+              >
+                {topic.label} <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {fields.length === 0 && (
         <p className="muted">No topics are available in your current scope.</p>
       )}
     </fieldset>
@@ -187,24 +230,23 @@ function ManageAccount({
       className="access-record stack"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (role === "Reviewer" && !approved.length)
+        if ((role === "Reviewer" || role === "Approver") && !approved.length)
           return setResult({
             ok: false,
-            message:
-              "Choose at least one approved review topic for a Reviewer.",
+            message: `Choose at least one approved review topic for a ${role}.`,
           });
-        if (role === "Approver" && !assigned.length)
+        if (role === "Senior Approver" && !assigned.length)
           return setResult({
             ok: false,
             message:
-              "Choose at least one assigned approval topic for an Approver.",
+              "Choose at least one assigned approval topic for a Senior Approver.",
           });
         setPending(true);
         const outcome = await setAccess(
           profile.id,
           role,
           role === "Reader" ? [] : approved,
-          role === "Approver" ? assigned : [],
+          role === "Senior Approver" ? assigned : [],
         );
         setResult(outcome);
         onSaved(outcome);
@@ -215,6 +257,7 @@ function ManageAccount({
         <h3>{profile.fullName}</h3>
         <span className="tag">{profile.role}</span>
       </div>
+      {profile.githubLogin && <p className="muted">@{profile.githubLogin}</p>}
       <label className="field">
         Role for {profile.fullName}
         <select
@@ -229,9 +272,12 @@ function ManageAccount({
           <option>Reader</option>
           <option>Reviewer</option>
           <option>Approver</option>
+          <option>Senior Approver</option>
         </select>
       </label>
-      {(role === "Reviewer" || role === "Approver") && (
+      {(role === "Reviewer" ||
+        role === "Approver" ||
+        role === "Senior Approver") && (
         <TopicChoices
           label={`Approved review topics for ${profile.fullName}`}
           value={approved}
@@ -239,7 +285,7 @@ function ManageAccount({
           disabled={pending}
         />
       )}
-      {role === "Approver" && (
+      {role === "Senior Approver" && (
         <TopicChoices
           label={`Assigned approval topics for ${profile.fullName}`}
           value={assigned}
@@ -297,6 +343,7 @@ export default function AccessPage() {
     null,
   );
   const [accessResult, setAccessResult] = useState<ActionResult | null>(null);
+  const [researcherQuery, setResearcherQuery] = useState("");
 
   if (!user)
     return (
@@ -330,7 +377,7 @@ export default function AccessPage() {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const invitationMatches =
     invitation?.intendedEmail.toLowerCase() === user.email.toLowerCase();
-  const isApprover = user.role === "Approver" || user.role === "Admin";
+  const isApprover = user.role === "Senior Approver" || user.role === "Admin";
   const allowedInvitationTopics =
     user.role === "Admin"
       ? topics.map((topic) => topic.id)
@@ -342,6 +389,21 @@ export default function AccessPage() {
   );
   const createdInvitations = state.invitations.filter(
     (item) => item.createdBy === user.id,
+  );
+  const researcherSearch = researcherQuery.trim().toLocaleLowerCase();
+  const matchingResearchers = new Set(
+    state.profiles
+      .filter((profile) =>
+        [
+          profile.fullName,
+          profile.githubLogin ?? "",
+          profile.affiliation,
+          profile.email,
+          profile.id,
+          profile.role,
+        ].some((value) => value.toLocaleLowerCase().includes(researcherSearch)),
+      )
+      .map((profile) => profile.id),
   );
 
   return (
@@ -373,7 +435,7 @@ export default function AccessPage() {
           <strong>Approved review topics:</strong>{" "}
           {topicNames(user.approvedTopics) || "None yet"}
         </p>
-        {user.role === "Approver" && (
+        {user.role === "Senior Approver" && (
           <p>
             <strong>Assigned approval topics:</strong>{" "}
             {topicNames(user.assignedTopics) || "None"}
@@ -530,7 +592,7 @@ export default function AccessPage() {
             </p>
             <p className="muted">
               Accepting adds reviewer access for these topics only. It does not
-              grant approver or admin privileges.
+              grant approver, senior approver, or admin privileges.
             </p>
             {invitation.usedBy ? (
               <p className="notice">
@@ -764,16 +826,35 @@ export default function AccessPage() {
           <div className="section-heading">
             <h2 id="admin-access-heading">Manage researcher access</h2>
             <p className="muted">
-              Set review topics and assign approval topics for approvers.
+              Set review topics and appoint Senior Approvers to approve or
+              invite reviewers within assigned topics.
             </p>
           </div>
           <Result result={accessResult} />
-          {state.profiles.map((profile) => (
-            <ManageAccount
-              key={`${profile.id}-${profile.role}-${profile.approvedTopics.join(",")}-${profile.assignedTopics.join(",")}`}
-              profile={profile}
-              onSaved={setAccessResult}
+          <label className="field">
+            Search researchers
+            <input
+              className="input"
+              type="search"
+              value={researcherQuery}
+              onChange={(event) => setResearcherQuery(event.target.value)}
+              placeholder="Name, GitHub username, affiliation, or role"
+              autoComplete="off"
             />
+          </label>
+          <p className="muted" role="status">
+            {matchingResearchers.size === 0
+              ? "No researchers match your search."
+              : `${matchingResearchers.size} ${matchingResearchers.size === 1 ? "researcher" : "researchers"}`}
+          </p>
+          {state.profiles.map((profile) => (
+            <div key={profile.id} hidden={!matchingResearchers.has(profile.id)}>
+              <ManageAccount
+                key={`${profile.id}-${profile.role}-${profile.approvedTopics.join(",")}-${profile.assignedTopics.join(",")}`}
+                profile={profile}
+                onSaved={setAccessResult}
+              />
+            </div>
           ))}
         </section>
       )}

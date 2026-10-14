@@ -1,6 +1,6 @@
 export type Field = "Astronomy" | "Artificial Intelligence";
 export type Stage = "Awaiting Validation" | "Validated" | "Published";
-export type Role = "Reader" | "Reviewer" | "Approver" | "Admin";
+export type Role = "Reader" | "Reviewer" | "Approver" | "Senior Approver" | "Admin";
 export type TopicId =
   | "bandit-theory"
   | "machine-learning"
@@ -44,6 +44,7 @@ export interface Discovery {
 }
 export interface Profile {
   id: string;
+  githubLogin?: string;
   fullName: string;
   email: string;
   affiliation: string;
@@ -109,7 +110,7 @@ export interface ActionResult {
 }
 export type ProfileInput = Omit<
   Profile,
-  "id" | "email" | "role" | "approvedTopics" | "assignedTopics"
+  "id" | "githubLogin" | "email" | "role" | "approvedTopics" | "assignedTopics"
 >;
 export interface CommentInput {
   discoveryId: string;

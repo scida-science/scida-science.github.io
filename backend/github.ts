@@ -229,11 +229,12 @@ export class GitHubRepositoryStore implements GitHubStore {
     );
   }
   private async adminFile() {
-    await this.protectAdmin();
-    const file = await this.jsonFile<AdminState>(
-      this.api.env.ADMIN_REPOSITORY,
-      statePath,
-    );
+    // Both reads are independent. Nothing is returned or mutated until the
+    // repository privacy check and current record read have both succeeded.
+    const [, file] = await Promise.all([
+      this.protectAdmin(),
+      this.jsonFile<AdminState>(this.api.env.ADMIN_REPOSITORY, statePath),
+    ]);
     const state = file.value;
     if (
       !object(state) ||

@@ -10,7 +10,7 @@ import {
 } from "../lib/api";
 import type { Invitation, Profile, ProfileInput } from "../types";
 import { createGitHubAuth, OAUTH_KEY } from "./auth";
-import { canDiscuss } from "./permissions";
+import { canDiscuss, canManageTopic, canReviewApplication } from "./permissions";
 import { createPortalService, type PortalService } from "./portalService";
 import { emptyPortalState } from "./repository";
 
@@ -200,6 +200,38 @@ describe("API configuration and sessions", () => {
         )
       ).ok,
     ).toBe(false);
+  });
+});
+
+describe("Senior Approver permissions", () => {
+  it("parses a server-issued Senior Approver and grants only their assigned approval scope", async () => {
+    const { service, setProfile } = setup({ role: "Senior Approver" });
+    setProfile({ ...profile("Senior Approver"), assignedTopics: ["bandit-theory"] });
+    await service.start();
+    const user = service.getSnapshot().user;
+    expect(user?.role).toBe("Senior Approver");
+    expect(canManageTopic(user, "bandit-theory")).toBe(true);
+    expect(canManageTopic(user, "exoplanets")).toBe(false);
+    expect(canDiscuss(user, discoveries[0])).toBe(false);
+    expect(canReviewApplication(user, {
+      id: "application", userId: "other", topics: ["bandit-theory"],
+      evidence: "Research evidence", status: "Pending", createdAt: "2026-10-14T10:00:00Z",
+    })).toBe(true);
+  });
+
+  it("denies ordinary Approver invitations while preserving approved discussions", async () => {
+    const { service, setProfile, fetcher } = setup({ role: "Approver" });
+    setProfile({ ...profile("Approver"), approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"] });
+    await service.start();
+    const user = service.getSnapshot().user;
+    expect(canManageTopic(user, "bandit-theory")).toBe(false);
+    expect(canReviewApplication(user, {
+      id: "application", userId: "other", topics: ["bandit-theory"],
+      evidence: "Research evidence", status: "Pending", createdAt: "2026-10-14T10:00:00Z",
+    })).toBe(false);
+    expect(canDiscuss(user, discoveries[0])).toBe(true);
+    expect((await service.actions.createInvitation(["bandit-theory"], "other@example.test")).ok).toBe(false);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/v1/invitations"))).toBe(false);
   });
 });
 

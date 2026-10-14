@@ -13,31 +13,40 @@ import {
 } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
 import { topics } from "../data/discoveries";
+import { hasResearchInterests, orderDiscoveries } from "../lib/discoveryFeed";
 import { StatusBadge, formatDate, stages } from "../components/Ui";
 import type { Field, Stage } from "../types";
 
+type FeedTab = Field | "For you" | "Recent discoveries";
+const researchFields = [...new Set(topics.map((topic) => topic.field))];
+const tabId = (tab: FeedTab) =>
+  `research-tab-${tab.toLowerCase().replaceAll(" ", "-")}`;
+
 export default function HomePage() {
   const { state, user, loading, error } = usePortal();
-  const [field, setField] = useState<Field | "Recent discoveries">(
-    "Recent discoveries",
-  );
+  const [selectedTab, setSelectedTab] = useState<FeedTab | null>(null);
   const [stage, setStage] = useState<Stage | "All stages">("All stages");
   const [query, setQuery] = useState("");
-  const fields = [
+  const personalized = hasResearchInterests(user);
+  const fields: FeedTab[] = [
+    ...(personalized ? ["For you" as const] : []),
     "Recent discoveries",
-    "Astronomy",
-    "Artificial Intelligence",
-  ] as const;
-  const items = state.discoveries
-    .filter(
+    ...researchFields,
+  ];
+  const field = selectedTab && fields.includes(selectedTab)
+    ? selectedTab
+    : personalized ? "For you" : "Recent discoveries";
+  const items = orderDiscoveries(
+    state.discoveries.filter(
       (d) =>
-        (field === "Recent discoveries" || d.field === field) &&
+        (field === "Recent discoveries" || field === "For you" || d.field === field) &&
         (stage === "All stages" || d.status === stage) &&
         `${d.title} ${d.summary} ${topics.find((t) => t.id === d.topic)?.label}`
           .toLowerCase()
           .includes(query.toLowerCase()),
-    )
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    ),
+    field === "For you" ? user : null,
+  );
   if (state.discoveries.length === 0 && (loading || error))
     return (
       <section className="empty-state">
@@ -72,7 +81,7 @@ export default function HomePage() {
             <span> / discoveries</span>
           </span>
           <div className="hero-note-rule" />
-          <span>Astronomy · Artificial Intelligence</span>
+          <span>{researchFields.join(" · ")}</span>
         </div>
       </section>
       <div className="home-layout">
@@ -85,12 +94,12 @@ export default function HomePage() {
             {fields.map((f, index) => (
               <button
                 key={f}
-                id={`field-${index}`}
+                id={tabId(f)}
                 role="tab"
                 aria-selected={field === f}
                 aria-controls="discovery-results"
                 tabIndex={field === f ? 0 : -1}
-                onClick={() => setField(f)}
+                onClick={() => setSelectedTab(f)}
                 onKeyDown={(e) => {
                   let next = index;
                   if (e.key === "ArrowRight")
@@ -101,13 +110,13 @@ export default function HomePage() {
                   else if (e.key === "End") next = fields.length - 1;
                   else return;
                   e.preventDefault();
-                  setField(fields[next]);
-                  document.getElementById(`field-${next}`)?.focus();
+                  setSelectedTab(fields[next]);
+                  document.getElementById(tabId(fields[next]))?.focus();
                 }}
               >
                 {f === "Astronomy" ? (
                   <Telescope size={16} />
-                ) : f === "Artificial Intelligence" ? (
+                ) : f === "Artificial Intelligence" || f === "For you" ? (
                   <Sparkles size={16} />
                 ) : (
                   <Clock3 size={16} />
@@ -120,7 +129,11 @@ export default function HomePage() {
             <p aria-live="polite">
               <strong>{items.length}</strong>{" "}
               {items.length === 1 ? "discovery" : "discoveries"}
-              <span className="muted"> · Latest updates first</span>
+              <span className="muted">
+                {field === "For you"
+                  ? " · Your topics and fields first"
+                  : " · Latest updates first"}
+              </span>
             </p>
             <div className="filter-controls">
               <label className="search-field">
@@ -152,7 +165,7 @@ export default function HomePage() {
           <div
             id="discovery-results"
             role="tabpanel"
-            aria-labelledby={`field-${fields.indexOf(field)}`}
+            aria-labelledby={tabId(field)}
           >
             {items.map((d) => (
               <article className="discovery-card" key={d.id}>
@@ -228,7 +241,7 @@ export default function HomePage() {
                 <button
                   className="btn btn-secondary"
                   onClick={() => {
-                    setField("Recent discoveries");
+                    setSelectedTab(null);
                     setStage("All stages");
                     setQuery("");
                   }}

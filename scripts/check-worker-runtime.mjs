@@ -176,7 +176,7 @@ try {
   assert.equal(user.id, '200');
   assert.equal(user.role, 'Reader');
   assert.deepEqual(user.approvedTopics, []);
-  assert.equal((await post('/v1/access/200', { role: 'Approver', assignedTopics: ['bandit-theory'], approvedTopics: [] }, token)).status, 403);
+  assert.equal((await post('/v1/access/200', { role: 'Senior Approver', assignedTopics: ['bandit-theory'], approvedTopics: [] }, token)).status, 403);
   assert.equal(JSON.stringify(admin).includes('synthetic-github-user-token'), false, 'GitHub user tokens never persist');
   assert.equal(JSON.stringify(admin).includes(token), false, 'Only session hashes persist');
   assert.equal((await post('/auth/logout', {}, token)).status, 200);

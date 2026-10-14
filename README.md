@@ -77,13 +77,16 @@ The Worker enforces every permission using the current private records:
 
 - Readers maintain their own profiles, request code, and apply for review topics.
 - Reviewers post and reply only within approved topics. Approval for bandit theory grants no astronomy access.
-- Approvers assess other researchers and create invitations only within assigned topics. They cannot appoint approvers or admins.
-- The owner edits discovery content/status and appoints approvers. Admin status comes exclusively from `ADMIN_GITHUB_ID`, currently `89913681` for the verified owner `SarveshVGharat`. Profile edits and browser storage cannot change it.
+- Ordinary Approvers can discuss research within approved topics. They cannot approve applications or create invitations.
+- Senior Approvers assess other researchers and create invitations only within assigned topics. They cannot appoint roles. Invitations cease to be valid if their creator loses the necessary approval authority.
+- Only the owner edits discovery content/status and appoints Approvers or Senior Approvers. Admin status comes exclusively from `ADMIN_GITHUB_ID`, currently `89913681` for the verified owner `SarveshVGharat`. Profile edits and browser storage cannot change it.
 - Discussion participation and reviewer-only materials still require explicit topic approval, including for the owner. Applications and invitations cannot be used for self-approval.
 
 Invitations are single use, expire after seven days, bind to the recipient's verified GitHub primary email, and require confirmation of their exact topics. Only a code hash is stored; the creator sees the raw code once. Sharing that code and responding to code requests are manual tasks; no invitation or code-request email is sent automatically.
 
 Profiles support selected research fields and matching expertise topics, an optional Google Scholar link, and application evidence. Scholar is not scraped. Email comes from the verified GitHub identity and is not editable in the profile. Other users' private email addresses are not exposed with discussion authors.
+
+Reviewer applications use a research-field dropdown followed by that field's topics. Selections remain visible when switching fields. The owner can search researcher access records by name, public GitHub username, affiliation, role, or account ID. Saved profile expertise determines the signed-in **For you** homepage: matching topics come first, followed by the chosen fields and then other research. **Recent discoveries** remains chronological, and personalization never grants review permissions.
 
 ## Authentication and refresh behavior
 
@@ -94,6 +97,8 @@ Only an opaque, revocable SciDA session is held in `sessionStorage`, for up to e
 Visible pages refresh shared data every two minutes and when the tab regains focus. The Refresh control is also available. The backend reads current account permissions, sessions, discovery visibility, and material policies for each request; only short-lived GitHub installation tokens are cached. Configured API failures remain visible and never activate simulated accounts or fake successful submissions.
 
 Discovery files load in batches of three independent GitHub reads to reduce waiting while keeping permissions fresh. Mathematical rendering code and fonts load only when a brief contains an equation. GitHub sign-in does not wait for the public discovery feed to finish loading.
+
+During sign-in, repository privacy verification and the current administrative file read run concurrently. Both must succeed before any record is returned or changed. GitHub redirects and the two durable single-use-code/session writes still take network time; no authentication check is skipped to simulate faster login.
 
 ## Edit discoveries and materials
 

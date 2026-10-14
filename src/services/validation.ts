@@ -8,7 +8,7 @@ export const topicIds: TopicId[] = [
   "exoplanets",
   "galaxy-evolution",
 ];
-export const roles: Role[] = ["Reader", "Reviewer", "Approver", "Admin"];
+export const roles: Role[] = ["Reader", "Reviewer", "Approver", "Senior Approver", "Admin"];
 const fields: Field[] = ["Astronomy", "Artificial Intelligence"];
 const stages = ["Awaiting Validation", "Validated", "Published"];
 const object = (value: unknown): value is Record<string, unknown> =>

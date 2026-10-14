@@ -18,6 +18,7 @@ import {
 import { HttpError, materialKinds, object, validMaterial } from "./model";
 import type {
   AdminState,
+  AccessRecord,
   DiscoveryDocument,
   GitHubStore,
   MaterialKind,
@@ -129,12 +130,13 @@ export function createDomain(
     const role =
       userId === adminId
         ? "Admin"
-        : access && ["Reviewer", "Approver"].includes(access.role)
+        : access && ["Reviewer", "Approver", "Senior Approver"].includes(access.role)
           ? access.role
           : "Reader";
     return {
       ...clone(record.profile),
       id: userId,
+      githubLogin: record.githubLogin,
       email: record.email,
       role,
       approvedTopics:
@@ -158,7 +160,7 @@ export function createDomain(
     requested.length > 0 &&
     validTopics(requested) &&
     (isAdmin(current) ||
-      (current.role === "Approver" &&
+      (current.role === "Senior Approver" &&
         requested.every((topic) => current.assignedTopics.includes(topic))));
   const canDiscuss = (current: Profile | null, discovery: Discovery) =>
     !!current &&
@@ -673,7 +675,7 @@ export function createDomain(
     ): Promise<void> {
       if (
         !numericId(targetId) ||
-        !["Reader", "Reviewer", "Approver"].includes(role as string)
+        !["Reader", "Reviewer", "Approver", "Senior Approver"].includes(role as string)
       )
         bad("Choose an existing account and a non-admin role.");
       const approvedTopics = topics(approved);
@@ -681,9 +683,9 @@ export function createDomain(
       if (
         (role === "Reader" &&
           approvedTopics.length + assignedTopics.length > 0) ||
-        (role === "Reviewer" &&
+        ((role === "Reviewer" || role === "Approver") &&
           (!approvedTopics.length || assignedTopics.length)) ||
-        (role === "Approver" && !assignedTopics.length)
+        (role === "Senior Approver" && !assignedTopics.length)
       )
         bad("Choose appropriate topic scopes for this role.");
       await store.updateAdmin((state) => {
@@ -697,7 +699,7 @@ export function createDomain(
         if (!owns(state.profiles, targetId as string))
           throw new HttpError(404, "Account not found.");
         state.access[targetId as string] = {
-          role: role as "Reader" | "Reviewer" | "Approver",
+          role: role as AccessRecord["role"],
           approvedTopics: [...approvedTopics],
           assignedTopics: [...assignedTopics],
         };

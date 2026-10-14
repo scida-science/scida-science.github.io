@@ -160,7 +160,7 @@ it("applies, approves within scope, and persists versioned threads through the r
   const owner = await repository(env.ADMIN_GITHUB_ID),
     reader = await repository("200"),
     approver = await repository("300");
-  await owner.setAccess("300", "Approver", [], ["bandit-theory"]);
+  await owner.setAccess("300", "Senior Approver", [], ["bandit-theory"]);
   await reader.applyForReview(["bandit-theory"], "Relevant research evidence");
   const application = (await approver.read()).state.applications[0];
   await approver.reviewApplication(
@@ -189,8 +189,24 @@ it("applies, approves within scope, and persists versioned threads through the r
     reader.addComment({ ...comment, discoveryId: "AST-001" }),
   ).rejects.toMatchObject({ status: 403 });
   await expect(
-    approver.setAccess("200", "Approver", [], ["exoplanets"]),
+    approver.setAccess("200", "Senior Approver", [], ["exoplanets"]),
   ).rejects.toMatchObject({ status: 403 });
+});
+it("returns HTTP 403 for ordinary Approver approval, invitation and senior appointment attempts", async () => {
+  const owner = await repository(env.ADMIN_GITHUB_ID);
+  const approver = await repository("300");
+  const reader = await repository("200");
+  await owner.setAccess("300", "Approver", ["bandit-theory"], []);
+  await reader.applyForReview(["bandit-theory"], "Relevant research evidence");
+  const application = state.applications[0];
+  expect((await approver.read()).user?.role).toBe("Approver");
+  expect((await approver.read()).state.applications).toEqual([]);
+  await expect(approver.reviewApplication(application.id, "Approved", "")).rejects.toMatchObject({ status: 403 });
+  await expect(approver.createInvitation(["bandit-theory"], "400@example.test")).rejects.toMatchObject({ status: 403 });
+  await expect(approver.setAccess("200", "Senior Approver", [], ["bandit-theory"])).rejects.toMatchObject({ status: 403 });
+  expect(state.applications[0].status).toBe("Pending");
+  expect(state.invitations).toEqual([]);
+  expect(state.access["200"].role).toBe("Reader");
 });
 it("round-trips invitation preview/acceptance and code requests without local fabricated success", async () => {
   const owner = await repository(env.ADMIN_GITHUB_ID),

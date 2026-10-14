@@ -120,7 +120,7 @@ describe("Public research and real account interface", () => {
     await interaction.click(
       screen.getByRole("tab", { name: "Artificial Intelligence" }),
     );
-    await interaction.keyboard("{ArrowLeft}");
+    await interaction.keyboard("{ArrowRight}");
     expect(
       screen
         .getByRole("tab", { name: "Astronomy" })
@@ -159,6 +159,21 @@ describe("Public research and real account interface", () => {
     );
     expect(window.location.hash).toBe("#/discoveries/AST-003");
     expect(screen.getAllByText("Not uploaded yet")).toHaveLength(5);
+  });
+
+  it("prioritizes profile expertise without hiding research and keeps a chronological Recent tab", async () => {
+    signedIn({ ...researcher, fields: ["Artificial Intelligence"], expertiseTopics: ["bandit-theory"] });
+    portal.state.discoveries.forEach((discovery) => { discovery.updatedAt = "2026-10-01T12:00:00Z"; });
+    portal.state.discoveries.find((discovery) => discovery.id === "AI-001")!.updatedAt = "2026-09-01T12:00:00Z";
+    portal.state.discoveries.find((discovery) => discovery.id === "AST-001")!.updatedAt = "2026-10-14T12:00:00Z";
+    const interaction = userEvent.setup();
+    openApp();
+    expect(screen.getByRole("tab", { name: "For you" }).getAttribute("aria-selected")).toBe("true");
+    const cards = () => within(screen.getByRole("tabpanel")).getAllByRole("article");
+    expect(cards()).toHaveLength(6);
+    expect(cards()[0].textContent).toContain("AI-001");
+    await interaction.click(screen.getByRole("tab", { name: "Recent discoveries" }));
+    expect(cards()[0].textContent).toContain("AST-001");
   });
 
   it("does not collect credentials or simulate login when account services are unconfigured", () => {
@@ -486,10 +501,10 @@ describe("Public research and real account interface", () => {
     ]);
   });
 
-  it("allows assigned approvers to review applications but never appoint approvers", async () => {
+  it("allows assigned senior approvers to review applications but never appoint approvers", async () => {
     signedIn({
       ...researcher,
-      role: "Approver",
+      role: "Senior Approver",
       assignedTopics: ["bandit-theory"],
     });
     portal.state.applications = [
@@ -545,7 +560,7 @@ describe("Public research and real account interface", () => {
       within(role)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Reader", "Reviewer", "Approver"]);
+    ).toEqual(["Reader", "Reviewer", "Approver", "Senior Approver"]);
     expect(
       screen.queryByRole("combobox", { name: "Role for Test Researcher" }),
     ).toBeNull();
@@ -561,7 +576,7 @@ describe("Public research and real account interface", () => {
     expect(screen.queryByText(/No discussion for this version yet/)).toBeNull();
   });
 
-  it.each(["Reader", "Reviewer", "Approver"] as const)(
+  it.each(["Reader", "Reviewer", "Approver", "Senior Approver"] as const)(
     "does not expose the administrator code request queue to a %s",
     (role) => {
       signedIn({ ...researcher, role });

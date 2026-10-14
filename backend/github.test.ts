@@ -446,6 +446,40 @@ describe("GitHub repository discovery and file schema", () => {
 });
 
 describe("Private administrative records and SHA concurrency", () => {
+  it("overlaps repository verification and state retrieval during sign-in reads", async () => {
+    vi.useFakeTimers();
+    let active = 0;
+    const { store } = harness(async (url) => {
+      active += 1;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      active -= 1;
+      return json(url.pathname === adminPath
+        ? repository("scida-admin") : file(emptyAdminState()));
+    });
+    const pending = store.readAdmin();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(active).toBe(2);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await pending).toEqual(emptyAdminState());
+    expect(active).toBe(0);
+  });
+
+  it("never starts a mutation while the repository privacy check is pending or fails", async () => {
+    let resolveMetadata!: (response: Response) => void;
+    const { store, fetcher } = harness((url) => url.pathname === adminPath
+      ? new Promise<Response>((resolve) => { resolveMetadata = resolve; })
+      : json(file(emptyAdminState())));
+    const mutate = vi.fn();
+    const pending = store.updateAdmin(mutate);
+    const rejected = expect(pending).rejects.toMatchObject({ status: 503 });
+    await vi.waitFor(() => expect(resolveMetadata).toBeDefined());
+    expect(mutate).not.toHaveBeenCalled();
+    resolveMetadata(json(repository("scida-admin", { private: false })));
+    await rejected;
+    expect(mutate).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
+  });
+
   it.each([{ private: false }, { archived: true }])(
     "refuses administrative storage that is not active and private: %j",
     async (change) => {
@@ -453,7 +487,7 @@ describe("Private administrative records and SHA concurrency", () => {
         json(repository("scida-admin", change)),
       );
       await expect(store.readAdmin()).rejects.toMatchObject({ status: 503 });
-      expect(fetcher).toHaveBeenCalledOnce();
+      expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
     },
   );
 

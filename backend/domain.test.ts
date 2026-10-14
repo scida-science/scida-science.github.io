@@ -133,7 +133,7 @@ beforeEach(() => {
     assignedTopics: [],
   };
   store.state.access[APPROVER] = {
-    role: "Approver",
+    role: "Senior Approver",
     approvedTopics: [],
     assignedTopics: ["bandit-theory"],
   };
@@ -228,10 +228,49 @@ describe("server identity, profiles, and privacy", () => {
     expect(result.state.profiles.find((item) => item.id === OWNER)?.email).toBe(
       "owner@example.test",
     );
+    expect(result.state.profiles.find((item) => item.id === READER)?.githubLogin)
+      .toBe(store.state.profiles[READER].githubLogin);
   });
 });
 
 describe("scope-specific applications and account permissions", () => {
+  it("keeps ordinary Approvers discussion-only, even with legacy assigned topics", async () => {
+    store.state.access[OTHER] = {
+      role: "Approver",
+      approvedTopics: ["bandit-theory"],
+      assignedTopics: ["bandit-theory"],
+    };
+    await domain.applyForReview(READER, ["bandit-theory"], "Relevant research evidence.");
+    const application = store.state.applications[0];
+    const before = copy(store.state);
+    await denied(domain.reviewApplication(OTHER, application.id, true, ""));
+    await denied(domain.createInvitation(OTHER, ["bandit-theory"], "invitee@example.test"));
+    await denied(domain.setAccess(OTHER, READER, "Senior Approver", [], ["bandit-theory"]));
+    expect(store.state).toEqual(before);
+    const portal = await domain.portal(OTHER);
+    expect(portal.user?.role).toBe("Approver");
+    expect(portal.state.applications).toEqual([]);
+    expect(portal.state.profiles.map((item) => item.id)).toEqual([OTHER]);
+    expect((await domain.addComment(OTHER, comment())).authorId).toBe(OTHER);
+    await denied(domain.addComment(OTHER, comment({ discoveryId: "AST-001", version: "v0.1" })));
+  });
+
+  it("allows only the owner to appoint an ordinary Approver with discussion topics", async () => {
+    await denied(domain.setAccess(APPROVER, OTHER, "Approver", ["bandit-theory"], []));
+    await domain.setAccess(OWNER, OTHER, "Approver", ["bandit-theory"], []);
+    expect(store.state.access[OTHER]).toEqual({
+      role: "Approver",
+      approvedTopics: ["bandit-theory"],
+      assignedTopics: [],
+    });
+  });
+
+  it("does not allow the owner to decide their own review application", async () => {
+    await domain.applyForReview(OWNER, ["bandit-theory"], "Owner review evidence.");
+    await denied(domain.reviewApplication(OWNER, store.state.applications[0].id, true, ""));
+    expect(store.state.access[OWNER].approvedTopics).toEqual([]);
+  });
+
   it("allows a Reader application and a scoped approver decision", async () => {
     await domain.applyForReview(
       READER,
@@ -311,10 +350,10 @@ describe("scope-specific applications and account permissions", () => {
   });
   it("only owner appoints approvers; API never appoints or changes owner", async () => {
     await denied(
-      domain.setAccess(READER, OTHER, "Approver", [], ["bandit-theory"]),
+      domain.setAccess(READER, OTHER, "Senior Approver", [], ["bandit-theory"]),
     );
     await denied(
-      domain.setAccess(APPROVER, OTHER, "Approver", [], ["bandit-theory"]),
+      domain.setAccess(APPROVER, OTHER, "Senior Approver", [], ["bandit-theory"]),
     );
     await denied(domain.setAccess(OWNER, OTHER, "Admin", [], []), 400);
     await denied(
@@ -323,12 +362,12 @@ describe("scope-specific applications and account permissions", () => {
     await domain.setAccess(
       OWNER,
       OTHER,
-      "Approver",
+      "Senior Approver",
       ["exoplanets"],
       ["exoplanets"],
     );
     expect(store.state.access[OTHER]).toMatchObject({
-      role: "Approver",
+      role: "Senior Approver",
       assignedTopics: ["exoplanets"],
     });
   });
@@ -337,6 +376,8 @@ describe("scope-specific applications and account permissions", () => {
     ["Reviewer", [], []],
     ["Reviewer", ["bandit-theory"], ["exoplanets"]],
     ["Approver", [], []],
+    ["Approver", ["bandit-theory"], ["exoplanets"]],
+    ["Senior Approver", [], []],
   ])(
     "rejects inconsistent role/topic assignments %s",
     async (role, approved, assigned) => {
@@ -385,6 +426,21 @@ describe("scope-specific applications and account permissions", () => {
 });
 
 describe("email-bound invitations", () => {
+  it("rejects a prior invitation after its issuer becomes an ordinary Approver", async () => {
+    const invitation = await domain.createInvitation(
+      APPROVER,
+      ["bandit-theory"],
+      "invitee@example.test",
+    );
+    // Old installations may retain assignedTopics in an ordinary Approver record.
+    store.state.access[APPROVER].role = "Approver";
+    const before = copy(store.state);
+    await denied(domain.previewInvitation(INVITEE, invitation.code));
+    await denied(domain.acceptInvitation(INVITEE, invitation.code, ["bandit-theory"]));
+    expect(store.state).toEqual(before);
+    expect(store.state.access[INVITEE].role).toBe("Reader");
+  });
+
   it("requires preview then exact scope and stores only a token hash", async () => {
     const invitation = await domain.createInvitation(
       APPROVER,

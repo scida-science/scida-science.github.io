@@ -5,6 +5,7 @@ import type {
   Invitation,
   ProfileInput,
   ReviewerApplication,
+  Role,
   TopicId,
 } from "../src/types";
 
@@ -23,7 +24,7 @@ export interface ProfileRecord {
   email: string;
 }
 export interface AccessRecord {
-  role: "Reader" | "Reviewer" | "Approver";
+  role: Exclude<Role, "Admin">;
   approvedTopics: TopicId[];
   assignedTopics: TopicId[];
 }
