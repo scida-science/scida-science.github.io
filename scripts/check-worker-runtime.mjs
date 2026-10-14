@@ -61,10 +61,12 @@ async function github(request) {
   if (url.origin === 'https://github.com' && path === '/login/oauth/access_token') {
     assert.equal(request.method, 'POST');
     if (redirectOAuth) return new Response(null, { status: 302, headers: { Location: 'https://redirect-must-not-be-followed.example/' } });
-    const exchange = await request.json();
-    assert.equal(exchange.client_secret, bindings.GITHUB_CLIENT_SECRET);
-    assert.equal(exchange.redirect_uri, bindings.API_ORIGIN + '/auth/callback');
-    assert.match(exchange.code_verifier, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(request.headers.get('Content-Type'), 'application/x-www-form-urlencoded');
+    assert.equal(request.headers.get('User-Agent'), 'SciDA-Research-Portal');
+    const exchange = new URLSearchParams(await request.text());
+    assert.equal(exchange.get('client_secret'), bindings.GITHUB_CLIENT_SECRET);
+    assert.equal(exchange.get('redirect_uri'), bindings.API_ORIGIN + '/auth/callback');
+    assert.match(exchange.get('code_verifier'), /^[A-Za-z0-9_-]{43}$/);
     return Response.json({ access_token: 'synthetic-github-user-token' });
   }
   if (url.origin !== 'https://api.github.com') {

@@ -139,15 +139,16 @@ export function createAuth(
           redirect: "manual",
           headers: {
             Accept: "application/json",
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "SciDA-Research-Portal",
           },
-          body: JSON.stringify({
+          body: new URLSearchParams({
             client_id: env.GITHUB_CLIENT_ID,
             client_secret: env.GITHUB_CLIENT_SECRET,
             code,
             redirect_uri: env.API_ORIGIN + "/auth/callback",
             code_verifier: attempt.verifier,
-          }),
+          }).toString(),
         },
       );
       const token: unknown = await tokenResponse.json();

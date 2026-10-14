@@ -43,7 +43,15 @@ function github(verified = true) {
   return vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     if (url.endsWith("/access_token")) {
-      expect(JSON.parse(String(init?.body)).code_verifier).toHaveLength(43);
+      const form = new URLSearchParams(String(init?.body));
+      const headers = new Headers(init?.headers);
+      expect(headers.get("Content-Type")).toBe("application/x-www-form-urlencoded");
+      expect(headers.get("User-Agent")).toBe("SciDA-Research-Portal");
+      expect(init?.redirect).toBe("manual");
+      expect(form.get("code_verifier")).toHaveLength(43);
+      expect(form.get("client_id")).toBe(env.GITHUB_CLIENT_ID);
+      expect(form.get("client_secret")).toBe(env.GITHUB_CLIENT_SECRET);
+      expect(form.get("redirect_uri")).toBe(env.API_ORIGIN + "/auth/callback");
       return Response.json({ access_token: "ghu_test_server_only" });
     }
     if (url.endsWith("/user/emails"))
