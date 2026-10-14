@@ -14,6 +14,8 @@ Real GitHub sign-in succeeded for the owner and a second authorized account. The
 
 Further live reviewer approval and discussion testing is **deferred at the owner's request until actual discoveries are added**. The temporary verification page and profile link have been removed. All six current discoveries remain fictional examples, including their validation and publication labels. No accounts, comments, or approval decisions are fabricated. Keep the remaining live checks explicit; passing Reader restrictions does not verify successful reviewer posting.
 
+The owner intends the forthcoming real discovery summaries to be public, including for signed-out visitors. Importing them is deferred until the source material is supplied; the private repositories and supporting-file access remain separate from summary visibility.
+
 The repository's `VITE_SCIDA_API_URL` variable is set to the deployed API. The deployment workflow requires a working GitHub data connection before publishing. `SESSION_SECRET` and `DISCUSSION_SECRET` are stored in Cloudflare; their encrypted local backups remain outside this repository.
 
 Use **Workers Free only, with $0 recurring costs**; do not enable paid plans or chargeable overages. Its 100,000 requests per day and 10 ms CPU allowance per invocation require testing the actual sign-in and storage routes after App setup. The owner confirmed **Workers Free** in the Cloudflare dashboard on 14 October 2026. Wrangler's subscription API returned `403`, so this plan confirmation comes from the owner, not an independent API check. [Pricing and limits](https://developers.cloudflare.com/workers/platform/pricing/).
@@ -90,6 +92,8 @@ The browser creates a PKCE verifier and random state, then navigates to the Work
 Only an opaque, revocable SciDA session is held in `sessionStorage`, for up to eight hours. The GitHub token is never returned to the browser. Session storage supports refreshes in the same tab; it does not hold profiles, comments, or privileges. Logout revokes the server session and clears the tab. Expiry or a `401` response removes the local identity and privileges. A failed server revocation is reported explicitly.
 
 Visible pages refresh shared data every two minutes and when the tab regains focus. The Refresh control is also available. The backend reads current account permissions, sessions, discovery visibility, and material policies for each request; only short-lived GitHub installation tokens are cached. Configured API failures remain visible and never activate simulated accounts or fake successful submissions.
+
+Discovery files load in batches of three independent GitHub reads to reduce waiting while keeping permissions fresh. Mathematical rendering code and fonts load only when a brief contains an equation. GitHub sign-in does not wait for the public discovery feed to finish loading.
 
 ## Edit discoveries and materials
 

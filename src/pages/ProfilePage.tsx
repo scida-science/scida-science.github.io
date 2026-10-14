@@ -81,10 +81,6 @@ export default function ProfilePage() {
       <header className="page-heading">
         <p className="eyebrow">Researcher profile</p>
         <h1>Your research profile</h1>
-        <p className="muted">
-          Introduce your expertise and provide evidence for topic-specific
-          reviewer access.
-        </p>
       </header>
 
       <form
@@ -98,9 +94,6 @@ export default function ProfilePage() {
       >
         <div className="section-heading">
           <h2>Profile details</h2>
-          <p className="muted">
-            Your email is private and is not displayed in discussions.
-          </p>
         </div>
         <div className="form-grid">
           <label className="field">
@@ -238,8 +231,7 @@ export default function ProfilePage() {
             placeholder="Relevant papers, projects, thesis, or code, with a short explanation of your contribution."
           />
           <span className="muted">
-            This text can support a reviewer application. Saving it does not
-            submit an application.
+            Saving evidence does not submit a reviewer application.
           </span>
         </label>
         {result && (
@@ -260,10 +252,6 @@ export default function ProfilePage() {
       <section className="panel stack" aria-labelledby="reviewer-standing">
         <div className="section-heading">
           <h2 id="reviewer-standing">Reviewer access</h2>
-          <p className="muted">
-            Access is approved for specific topics, independently of the
-            expertise listed above.
-          </p>
         </div>
         <dl className="profile-facts">
           <div>

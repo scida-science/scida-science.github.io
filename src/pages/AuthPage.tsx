@@ -35,7 +35,7 @@ export function AuthCallbackPage() {
 }
 
 export default function AuthPage() {
-  const { configured, loading, signInWithGitHub } = usePortal();
+  const { configured, signInWithGitHub } = usePortal();
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   return (
@@ -83,14 +83,12 @@ export default function AuthPage() {
         ) : (
           <>
             <p className="muted">
-              Use your GitHub account to sign in. New researchers start as
-              Readers and can complete a profile to apply for topic-specific
-              review access.
+              Sign in to save your profile and apply to review research.
             </p>
             <button
               type="button"
               className="btn btn-primary"
-              disabled={pending || loading}
+              disabled={pending}
               onClick={async () => {
                 setPending(true);
                 setResult(null);
@@ -119,10 +117,6 @@ export default function AuthPage() {
                 {result.message}
               </p>
             )}
-            <p className="muted">
-              GitHub handles account registration and recovery. Your GitHub
-              password is never entered on SciDA.
-            </p>
             <div className="auth-options">
               <a
                 href="https://github.com/signup"

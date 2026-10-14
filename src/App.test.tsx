@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 // Fixtures and simulated responses in this file are test-only; the application uses the authenticated research API.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act, cleanup, render, screen, waitFor, within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HashRouter, MemoryRouter } from "react-router-dom";
 import App from "./App";
@@ -231,6 +233,26 @@ describe("Public research and real account interface", () => {
     ).toBe("https://github.com/password_reset");
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
+  });
+
+  it("allows GitHub sign-in while the public discovery feed is still loading", async () => {
+    portal.loading = true;
+    const interaction = userEvent.setup();
+    openApp("/login");
+    const button = screen.getByRole("button", { name: "Sign in with GitHub" });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    await interaction.click(button);
+    expect(portal.signInWithGitHub).toHaveBeenCalledOnce();
+  });
+
+  it("renders accessible mathematical notation when a discovery is opened", async () => {
+    const view = openApp("/discoveries/AI-001");
+    await waitFor(() =>
+      expect(view.container.querySelector(".katex math")).not.toBeNull(),
+    );
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      discoveries.find((discovery) => discovery.id === "AI-001")!.title,
+    );
   });
 
   it("keeps the GitHub callback pending until the API confirms the account", () => {

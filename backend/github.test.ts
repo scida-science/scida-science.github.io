@@ -126,7 +126,10 @@ function issue(
     ...changes,
   };
 }
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("GitHub installation token initialization", () => {
   it("shares cold initialization among parallel reads and reuses the completed token", async () => {
@@ -192,6 +195,81 @@ describe("GitHub installation token initialization", () => {
 });
 
 describe("GitHub repository discovery and file schema", () => {
+  it("overlaps independent discovery reads with a bounded number of requests", async () => {
+    vi.useFakeTimers();
+    const repos = Array.from({ length: 6 }, (_, index) =>
+      repository(`discovery-${index}`),
+    );
+    let active = 0,
+      peak = 0,
+      reads = 0;
+    const { store } = harness(async (url) => {
+      if (url.pathname === "/installation/repositories")
+        return json({ repositories: repos });
+      const index = Number(url.pathname.match(/discovery-(\d+)/)![1]);
+      reads += 1;
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      active -= 1;
+      const value = document();
+      value.discovery.id = `AI-${index}`;
+      return json(file(value));
+    });
+    const pending = store.listDiscoveries();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(active).toBe(3);
+    expect(reads).toBe(3);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(active).toBe(3);
+    expect(reads).toBe(6);
+    await vi.advanceTimersByTimeAsync(100);
+    expect((await pending).map((row) => row.document.discovery.id)).toEqual(
+      Array.from({ length: 6 }, (_, index) => `AI-${index}`),
+    );
+    expect(active).toBe(0);
+    expect(peak).toBe(3);
+  });
+
+  it("rereads visibility, materials and revisions rather than caching discovery policy", async () => {
+    const value = document();
+    let sha = "first";
+    const { store } = harness((url) =>
+      url.pathname === "/installation/repositories"
+        ? json({ repositories: [repository()] })
+        : json(file(value, sha)),
+    );
+    const first = await store.listDiscoveries();
+    value.visibility = "signed-in";
+    value.materials.paper = { path: "paper.pdf", access: "admin" };
+    sha = "restricted";
+    const second = await store.listDiscoveries();
+    expect(first[0].document.visibility).toBe("public");
+    expect(second[0]).toMatchObject({
+      sha: "restricted",
+      document: {
+        visibility: "signed-in",
+        materials: { paper: { path: "paper.pdf", access: "admin" } },
+      },
+    });
+  });
+
+  it("fails the complete read when one concurrent document is invalid", async () => {
+    const { store } = harness((url) => {
+      if (url.pathname === "/installation/repositories")
+        return json({
+          repositories: [repository(), repository("discovery-invalid")],
+        });
+      return json(
+        file(url.pathname.includes("discovery-invalid") ? {} : document()),
+      );
+    });
+    await expect(store.listDiscoveries()).rejects.toMatchObject({
+      status: 503,
+      message: "A discovery repository has an invalid discovery.json.",
+    });
+  });
+
   it("enumerates private, active discovery repositories in the configured organization across pages", async () => {
     const ignored = Array.from({ length: 95 }, (_, index) =>
       repository(`unrelated-${index}`),

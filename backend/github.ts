@@ -294,35 +294,45 @@ export class GitHubRepositoryStore implements GitHubStore {
         );
     }
     const discoveries: StoredDiscovery[] = [];
-    // Bounded serial reads respect GitHub secondary rate limits.
-    for (const repo of repos.filter(
+    const eligible = repos.filter(
       (repo) =>
         repo.private &&
         !repo.archived &&
         repo.owner.login.toLowerCase() ===
           this.api.env.GITHUB_ORG.toLowerCase() &&
         repo.name.startsWith("discovery-"),
-    )) {
-      try {
-        const { value, sha } = await this.jsonFile<DiscoveryDocument>(
-          repo.name,
-          "discovery.json",
-        );
-        if (
-          !object(value) ||
-          value.schemaVersion !== 1 ||
-          !["public", "signed-in"].includes(value.visibility) ||
-          !validDiscovery(value.discovery) ||
-          !object(value.materials)
-        )
-          throw new HttpError(
-            503,
-            "A discovery repository has an invalid discovery.json.",
-          );
-        discoveries.push({ repository: repo.name, sha, document: value });
-      } catch (error) {
-        if (error instanceof GitHubError && error.status === 404) continue;
-        throw error;
+    );
+    // Independent documents need no serial round trips. Keep each read fresh
+    // and cap concurrency to avoid an unbounded burst against GitHub.
+    for (let offset = 0; offset < eligible.length; offset += 3) {
+      const batch = await Promise.all(
+        eligible.slice(offset, offset + 3).map(async (repo) => {
+          try {
+            const { value, sha } = await this.jsonFile<DiscoveryDocument>(
+              repo.name,
+              "discovery.json",
+            );
+            if (
+              !object(value) ||
+              value.schemaVersion !== 1 ||
+              !["public", "signed-in"].includes(value.visibility) ||
+              !validDiscovery(value.discovery) ||
+              !object(value.materials)
+            )
+              throw new HttpError(
+                503,
+                "A discovery repository has an invalid discovery.json.",
+              );
+            return { repository: repo.name, sha, document: value };
+          } catch (error) {
+            if (error instanceof GitHubError && error.status === 404)
+              return null;
+            throw error;
+          }
+        }),
+      );
+      for (const record of batch) {
+        if (record) discoveries.push(record);
       }
     }
     if (

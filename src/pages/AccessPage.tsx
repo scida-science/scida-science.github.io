@@ -178,8 +178,7 @@ function ManageAccount({
           <span className="tag">Admin</span>
         </div>
         <p className="muted">
-          The initial administrator is assigned through the controlled server
-          setup procedure. Admin privileges cannot be assigned or changed here.
+          Admin access cannot be changed here.
         </p>
       </article>
     );
@@ -305,13 +304,11 @@ export default function AccessPage() {
         <span className="eyebrow">Research community</span>
         <h1>Reviewer access</h1>
         <p>
-          Readers can browse discoveries and discussions. Approved researchers
-          can contribute within their review topics. Topic-specific approvers
-          assess applications and invitations.
+          Browse discoveries and discussions. Posting requires
+          reviewer approval for the discovery’s topic.
         </p>
         <p>
-          Sign in and complete your research profile to apply. Approval for
-          bandit theory does not grant access to astronomy discussions.
+          Sign in and complete your research profile to apply.
         </p>
         {configured ? (
           <div>
@@ -353,8 +350,7 @@ export default function AccessPage() {
         <p className="eyebrow">Research community</p>
         <h1>Reviewer access</h1>
         <p className="muted">
-          Expert review is approved by topic. Bandit theory approval does not
-          grant astronomy discussion access.
+          Approval applies only to the listed review topics.
         </p>
       </header>
       {error && (
@@ -383,20 +379,14 @@ export default function AccessPage() {
             {topicNames(user.assignedTopics) || "None"}
           </p>
         )}
-        <p className="muted">
-          Readers can browse research. Approved reviewers can discuss
-          discoveries in their topics. Approvers can approve and invite
-          reviewers within assigned topics. Only the administrator can edit
-          discoveries or appoint approvers.
-        </p>
       </section>
 
       <section className="panel stack" aria-labelledby="apply-heading">
         <div className="section-heading">
           <h2 id="apply-heading">Apply for reviewer access</h2>
           <p className="muted">
-            Choose specific topics you can review and provide relevant evidence.
-            An application does not grant immediate access.
+            Select topics and provide relevant evidence. Access begins after
+            approval.
           </p>
         </div>
         <form
@@ -481,8 +471,7 @@ export default function AccessPage() {
         <div className="section-heading">
           <h2 id="invitation-heading">Use an invitation</h2>
           <p className="muted">
-            Inspect the intended account and topics, then explicitly confirm the
-            scope before accepting.
+            Check the intended account and topics before accepting.
           </p>
         </div>
         <form
@@ -606,10 +595,9 @@ export default function AccessPage() {
               <h2 id="queue-heading">Review applications</h2>
               <p className="muted">
                 {user.role === "Admin"
-                  ? "The administrator can manage applications in every topic."
+                  ? "You can review applications in every topic."
                   : `Your assigned approval scope: ${topicNames(user.assignedTopics) || "none"}.`}{" "}
-                Approving grants the listed reviewer topics. Only the
-                administrator can appoint approvers.
+                Approval grants only the requested reviewer topics.
               </p>
             </div>
             <Result result={decisionResult} />
@@ -639,10 +627,9 @@ export default function AccessPage() {
             <div className="section-heading">
               <h2 id="create-invitation-heading">Invite a reviewer</h2>
               <p className="muted">
-                Create a code for a specific email and topic scope. Share the
-                code directly with the recipient; no email is sent
-                automatically. The recipient must confirm the scope before
-                access is granted.
+                Create a code for an email and review topics. Share it directly;
+                no email is sent. The recipient must confirm the scope to gain
+                access.
               </p>
             </div>
             <form
@@ -733,8 +720,7 @@ export default function AccessPage() {
           <div className="section-heading">
             <h2 id="code-requests-heading">Research code requests</h2>
             <p className="muted">
-              Requests submitted by signed-in researchers, with the most recent
-              first. Submitting a request does not grant repository access.
+              Latest requests first. A request does not grant repository access.
             </p>
           </div>
           {state.codeRequests.length > 0 ? (
@@ -778,8 +764,7 @@ export default function AccessPage() {
           <div className="section-heading">
             <h2 id="admin-access-heading">Manage researcher access</h2>
             <p className="muted">
-              Administrator only. Set review topics explicitly and assign
-              approval topics when appointing an approver.
+              Set review topics and assign approval topics for approvers.
             </p>
           </div>
           <Result result={accessResult} />

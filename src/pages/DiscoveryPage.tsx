@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import katex from "katex";
 import {
   ArrowLeft,
   Download,
@@ -19,6 +18,8 @@ import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
 import type { ActionResult, Discovery } from "../types";
+
+const Equation = lazy(() => import("../components/Equation"));
 
 const materialNames: Array<{
   key: keyof Discovery["materials"];
@@ -197,12 +198,6 @@ function Materials({ discovery }: { discovery: Discovery }) {
           </details>
         )}
       </section>
-      {discovery.illustrative && (
-        <div className="sidebar-disclaimer">
-          All materials are placeholders until explicitly added. SciDA does not
-          imply a real paper, DOI, dataset, or publication for these examples.
-        </div>
-      )}
     </>
   );
 }
@@ -223,17 +218,15 @@ function ResearchBrief({ discovery }: { discovery: Discovery }) {
             <h2>{s.title}</h2>
             <p>{s.body}</p>
             {s.equation && (
-              <div
-                className="equation"
-                dangerouslySetInnerHTML={{
-                  __html: katex.renderToString(s.equation, {
-                    throwOnError: false,
-                    displayMode: true,
-                    trust: false,
-                    output: "htmlAndMathml",
-                  }),
-                }}
-              />
+              <Suspense
+                fallback={
+                  <div className="equation">
+                    <code>{s.equation}</code>
+                  </div>
+                }
+              >
+                <Equation expression={s.equation} />
+              </Suspense>
             )}
           </div>
         </section>
@@ -312,9 +305,8 @@ export default function DiscoveryPage() {
       </header>
       {discovery.illustrative && (
         <div className="notice research-notice">
-          <strong>This is a fictional research example.</strong> All claims,
-          validation records, and publication stages demonstrate the interface.
-          No real scientific result is reported.
+          <strong>Illustrative example.</strong> The findings and review stages
+          are fictional.
         </div>
       )}
       {editing && (

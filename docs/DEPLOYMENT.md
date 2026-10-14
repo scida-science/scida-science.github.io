@@ -266,6 +266,12 @@ In the frontend's ignored `.env.local`, set `VITE_SCIDA_API_URL=http://127.0.0.1
 
 ## Operations and limits
 
+On 14 October 2026, discovery-file retrieval changed from serial reads to batches of three. It makes the same number of GitHub requests and does not cache profiles, permissions, or discovery visibility. A three-request public-portal sample before deployment took 3,549 / 2,949 / 3,510 ms (median 3,510 ms); after deployment it took 4,737 / 1,605 / 2,828 ms (median 2,828 ms). A subsequent smoke-check read took 2,202 ms. These are small wall-clock samples with variable network/startup latency, not a guaranteed speedup or CPU measurement.
+
+The initial post-change analytics window (18:15:58–18:16:56 UTC) reported three successful invocations, zero errors, CPU p50 17.851 ms, and p99 35.141 ms. These exceed the nominal Free allowance despite no observed CPU-limit rejection; keep monitoring actual workloads as noted above. No paid plan or overages were enabled.
+
+The frontend now loads KaTeX and its stylesheet only when rendering an equation. Initial JavaScript falls from approximately 616 kB to 353 kB before compression (188 kB to 110 kB gzipped), while the renderer remains available on discovery pages. The sign-in button is independent of public-feed loading. Browser-based visual and perceived-speed verification remains limited by the absence of a connected controllable browser.
+
 Administrative changes use GitHub Contents API SHA checks and bounded retries; discovery editor conflicts require a refresh. A discussion root is a GitHub Issue, and replies are Issue comments. Only entries authored by the SciDA App with a valid HMAC metadata envelope are rendered as scientific discussion. Direct GitHub comments and edited/forged envelopes are not imported as reviewer posts. Backup both private Issues and repository contents if archiving research discussions.
 
 There is **no distributed transaction** spanning the administrative repository and a discovery repository. A permission revocation and an already-authorized cross-repository write can race. Revocations govern subsequent authorization checks; this architecture cannot guarantee instantaneous cancellation of an in-flight write. Use this version for modest traffic and avoid describing it as a high-concurrency transactional service.

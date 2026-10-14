@@ -64,8 +64,6 @@ export default function HomePage() {
           </h1>
           <p>
             Explore discoveries from AI scientific research systems.
-            <br className="desktop-break" /> Examine the evidence. Help shape
-            what comes next.
           </p>
         </div>
         <div className="hero-note">
@@ -74,8 +72,7 @@ export default function HomePage() {
             <span> / discoveries</span>
           </span>
           <div className="hero-note-rule" />
-          <span>Two fields. Many perspectives.</span>
-          <small>A first look at a collaborative research space.</small>
+          <span>Astronomy · Artificial Intelligence</span>
         </div>
       </section>
       <div className="home-layout">
@@ -241,10 +238,6 @@ export default function HomePage() {
               </div>
             )}
           </div>
-          <div className="feed-end">
-            <span />A starting point for the next question
-            <span />
-          </div>
         </section>
         <aside className="home-sidebar">
           <section className="mission-panel">
@@ -255,9 +248,7 @@ export default function HomePage() {
               start of a conversation.
             </h2>
             <p>
-              SciDA connects AI-generated research with the judgment of
-              researchers. Every discovery makes room for scrutiny, uncertainty,
-              and a better question.
+              Examine research briefs, supporting evidence, and open questions.
             </p>
             <Link to="/access">
               Explore reviewer access <ArrowUpRight size={17} />
@@ -270,12 +261,12 @@ export default function HomePage() {
             </div>
           </section>
           <section className="stages-panel">
-            <h3>From question to contribution</h3>
+            <h3>Validation stages</h3>
             <div>
               <span className="stage-step">01</span>
               <p>
                 <strong>Awaiting Validation</strong>
-                <small>A proposed finding, ready for expert examination.</small>
+                <small>A proposed finding awaiting expert review.</small>
               </p>
             </div>
             <div>
@@ -292,15 +283,14 @@ export default function HomePage() {
               <p>
                 <strong>Published</strong>
                 <small>
-                  A publication stage, with supporting materials when available.
+                  Publication details and supporting materials when available.
                 </small>
               </p>
             </div>
             {state.discoveries.some((discovery) => discovery.illustrative) && (
               <p className="sidebar-disclaimer">
-                Entries marked “Illustrative example” demonstrate the research
-                interface. Their stages and validation records do not imply real
-                publication or validation.
+                “Illustrative example” entries are placeholders, not validated or
+                published research.
               </p>
             )}
           </section>
@@ -308,10 +298,9 @@ export default function HomePage() {
             <span className="small-icon">
               <ShieldIcon />
             </span>
-            <h3>Your expertise matters.</h3>
+            <h3>Review by topic</h3>
             <p>
-              Review access is granted by topic, so each discussion benefits
-              from relevant expertise.
+              Apply to discuss discoveries within your areas of expertise.
             </p>
             <Link to={!user || user.role === "Reader" ? "/access" : "/profile"}>
               {!user || user.role === "Reader"

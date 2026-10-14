@@ -169,7 +169,6 @@ export default function App() {
           <strong>SciDA</strong> <span className="footer-divider">/</span>{" "}
           Scientific Discovery Agent
         </span>
-        <span>An evolving space for research and review.</span>
         <Link to="/access">
           About reviewer access <ArrowRight size={14} />
         </Link>

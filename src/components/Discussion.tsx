@@ -180,8 +180,8 @@ export default function Discussion({ discovery }: { discovery: Discovery }) {
         <MessageSquare size={24} />
       </div>
       <p className="muted">
-        Reference a theorem, assumption, section, or figure. Each thread stays
-        associated with its manuscript version.
+        Cite a theorem, assumption, section, or figure. Threads retain their
+        manuscript version.
       </p>
       <label className="version-filter">
         Show discussions for{" "}
@@ -206,7 +206,7 @@ export default function Discussion({ discovery }: { discovery: Discovery }) {
           connected.
         </p>
       ) : loading ? (
-        <p role="status">Loading discussion?</p>
+        <p role="status">Loading discussion…</p>
       ) : error ? (
         <p className="notice notice-error">
           Discussion could not be refreshed. Displayed comments may be
@@ -216,23 +216,16 @@ export default function Discussion({ discovery }: { discovery: Discovery }) {
       {configured && !loading && !error && !visible.length && (
         <div className="empty-discussion">
           <MessageSquare size={22} />
-          <p>
-            No discussion for this version yet.
-            <br />
-            <span className="muted">
-              A careful question is a good place to start.
-            </span>
-          </p>
+          <p>No discussion for this version yet.</p>
         </div>
       )}
       {canDiscuss(user, discovery) ? (
         <CommentForm discovery={discovery} />
       ) : (
         <div className="notice discussion-gate">
-          <strong>Relevant expertise belongs in the conversation.</strong>
+          <strong>Reviewer access required to post</strong>
           <p>
-            Posting and replies require reviewer access for this discovery’s
-            specific topic. You can read every discussion.
+            Posting and replies require approval for this discovery’s topic.
           </p>
           <Link className="btn btn-secondary" to={user ? "/access" : "/login"}>
             {user
