@@ -87,22 +87,6 @@ export default function ProfilePage() {
         </p>
       </header>
 
-      {(user.role === "Reader" || user.role === "Reviewer") && (
-        <aside className="notice" aria-label="Deployment verification">
-          <strong>Temporary deployment check</strong>
-          <p>
-            Open the access check to verify this account's permissions. The
-            checks start automatically and do not change research or access.
-          </p>
-          <a
-            className="btn btn-secondary"
-            href={`${import.meta.env.BASE_URL}access-check.html`}
-          >
-            Open access check
-          </a>
-        </aside>
-      )}
-
       <form
         className="panel stack"
         onSubmit={async (event) => {
