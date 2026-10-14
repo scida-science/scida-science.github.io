@@ -6,6 +6,23 @@ import type { Fetcher } from "./github";
 const opaque = /^[A-Za-z0-9_-]{43}$/;
 const verifierPattern = /^[A-Za-z0-9._~-]{43,128}$/;
 const cookieName = "scida_oauth";
+function tokenFailure(error: unknown): string {
+  // Never echo GitHub's description/body: it may contain sensitive values.
+  switch (error) {
+    case "incorrect_client_credentials":
+      return "GitHub rejected the App credentials (incorrect_client_credentials). The site owner must update its client secret.";
+    case "redirect_uri_mismatch":
+      return "The GitHub App callback URL does not match SciDA (redirect_uri_mismatch). The site owner must correct it.";
+    case "bad_verification_code":
+      return "The GitHub authorization code expired or was already used (bad_verification_code). Start sign-in again.";
+    case "unverified_user_email":
+      return "Verify your primary email in GitHub settings, then sign in again (unverified_user_email).";
+    case "code_verifier_mismatch":
+      return "GitHub could not verify this sign-in attempt (code_verifier_mismatch). Start again in the same tab.";
+    default:
+      return "GitHub could not complete this sign-in. Start again.";
+  }
+}
 interface OAuthAttempt {
   state: string;
   verifier: string;
@@ -133,11 +150,11 @@ export function createAuth(
           }),
         },
       );
-      const token = (await tokenResponse.json()) as { access_token?: string };
-      if (!tokenResponse.ok || !token.access_token)
+      const token: unknown = await tokenResponse.json();
+      if (!tokenResponse.ok || !object(token) || typeof token.access_token !== "string" || !token.access_token)
         throw new HttpError(
           401,
-          "GitHub could not complete this sign-in. Start again.",
+          tokenFailure(object(token) ? token.error : undefined),
         );
       const githubHeaders = {
         Accept: "application/vnd.github+json",

@@ -34,6 +34,7 @@ const repos = discoveries.map((discovery) => ({
 }));
 const repoPrefix = `/repos/${bindings.GITHUB_ORG}/`;
 let requests = 0;
+let installationTokens = 0;
 let adminRevision = 1;
 let redirectOAuth = false;
 let redirectStorage = false;
@@ -75,6 +76,7 @@ async function github(request) {
     return Response.json({ account: { login: bindings.GITHUB_ORG }, suspended_at: null });
   }
   if (path === `/app/installations/${bindings.GITHUB_INSTALLATION_ID}/access_tokens`) {
+    installationTokens++;
     appAuthorization(request);
     assert.equal(request.method, 'POST');
     return Response.json({ token: 'synthetic-installation-token', expires_at: new Date(Date.now() + 3_600_000).toISOString() });
@@ -131,6 +133,7 @@ try {
   assert.equal(portal.headers.get('Access-Control-Allow-Origin'), bindings.FRONTEND_ORIGIN);
   assert.deepEqual(unexpected, []);
   assert.ok(requests > 10, 'Portal must exercise real packaged GitHub transport');
+  assert.equal(installationTokens, 1, 'Parallel cold-portal reads must share token initialization');
 
   const beforeAuth = requests;
   const verifier = 'V'.repeat(43);

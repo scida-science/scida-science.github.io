@@ -26,6 +26,7 @@ const segment = (value: string) => encodeURIComponent(value);
 const pathParts = (value: string) => value.split("/").map(segment).join("/");
 
 export class GitHubApi {
+  private pendingToken: Promise<string> | undefined;
   constructor(
     readonly env: Env,
     // Workers' native fetch requires its global receiver. Calling a captured
@@ -36,6 +37,18 @@ export class GitHubApi {
     const cacheKey = `${this.env.GITHUB_APP_ID}:${this.env.GITHUB_INSTALLATION_ID}:${this.env.GITHUB_PRIVATE_KEY}`;
     const cached = tokenCache.get(cacheKey);
     if (cached && cached.expires > Date.now() + 60000) return cached.token;
+    // Parallel reads in one request share initialization. Keep pending I/O on
+    // this request's adapter; only completed tokens enter the global cache.
+    if (this.pendingToken) return this.pendingToken;
+    const pending = this.issueToken(cacheKey);
+    this.pendingToken = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.pendingToken === pending) this.pendingToken = undefined;
+    }
+  }
+  private async issueToken(cacheKey: string): Promise<string> {
     const jwt = appJwt(this.env.GITHUB_APP_ID, this.env.GITHUB_PRIVATE_KEY);
     const installation = await this.request<{
       account: { login: string };

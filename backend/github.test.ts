@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { discoveries } from "../src/data/discoveries";
 import type { DiscussionComment } from "../src/types";
 import type { Env } from "./env";
+import * as cryptography from "./crypto";
 import { GitHubApi, GitHubRepositoryStore, type Fetcher } from "./github";
 import {
   emptyAdminState,
@@ -126,6 +127,69 @@ function issue(
   };
 }
 afterEach(() => vi.restoreAllMocks());
+
+describe("GitHub installation token initialization", () => {
+  it("shares cold initialization among parallel reads and reuses the completed token", async () => {
+    const signing = vi.spyOn(cryptography, "appJwt").mockReturnValue("synthetic-app-jwt");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fetcher = vi.fn<Fetcher>(async (input) => {
+      if (String(input).endsWith("/access_tokens"))
+        return json({ token, expires_at: new Date(Date.now() + 3_600_000).toISOString() });
+      await gate;
+      return json({ account: { login: env.GITHUB_ORG }, suspended_at: null });
+    });
+    const api = new GitHubApi({ ...env, GITHUB_INSTALLATION_ID: "9001" }, fetcher);
+    const reads = [api.token(), api.token(), api.token()];
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    release();
+    await expect(Promise.all(reads)).resolves.toEqual([token, token, token]);
+    expect(signing).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await expect(api.token()).resolves.toBe(token);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears failed initialization so a later request retries verification", async () => {
+    vi.spyOn(cryptography, "appJwt").mockReturnValue("synthetic-app-jwt");
+    let fail = true;
+    const fetcher = vi.fn<Fetcher>(async (input) => {
+      if (fail) return json({}, 503);
+      if (String(input).endsWith("/access_tokens"))
+        return json({ token, expires_at: new Date(Date.now() + 3_600_000).toISOString() });
+      return json({ account: { login: env.GITHUB_ORG }, suspended_at: null });
+    });
+    const api = new GitHubApi({ ...env, GITHUB_INSTALLATION_ID: "9002" }, fetcher);
+    const failures = await Promise.allSettled([api.token(), api.token()]);
+    expect(failures.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    fail = false;
+    await expect(api.token()).resolves.toBe(token);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("still refreshes tokens before expiry and checks installation authority again", async () => {
+    vi.spyOn(cryptography, "appJwt").mockReturnValue("synthetic-app-jwt");
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    let suspended = false;
+    const fetcher = vi.fn<Fetcher>(async (input) => {
+      if (String(input).endsWith("/access_tokens"))
+        return json({ token, expires_at: new Date(now + 120_000).toISOString() });
+      return json({ account: { login: env.GITHUB_ORG }, suspended_at: suspended ? new Date(now).toISOString() : null });
+    });
+    const api = new GitHubApi({ ...env, GITHUB_INSTALLATION_ID: "9003" }, fetcher);
+    await expect(api.token()).resolves.toBe(token);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    now += 61_000;
+    suspended = true;
+    await expect(api.token()).rejects.toMatchObject({ status: 503 });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    suspended = false;
+    await expect(api.token()).resolves.toBe(token);
+    expect(fetcher).toHaveBeenCalledTimes(5);
+  });
+});
 
 describe("GitHub repository discovery and file schema", () => {
   it("enumerates private, active discovery repositories in the configured organization across pages", async () => {

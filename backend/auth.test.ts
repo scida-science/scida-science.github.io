@@ -173,6 +173,30 @@ describe("GitHub OAuth and server sessions", () => {
     expect(params.has("error")).toBe(true);
     expect((await store.readAdmin()).profiles).toEqual({});
   });
+  it.each([
+    ["incorrect_client_credentials", "update its client secret"],
+    ["redirect_uri_mismatch", "callback URL"],
+    ["bad_verification_code", "expired or was already used"],
+    ["unverified_user_email", "Verify your primary email"],
+    ["code_verifier_mismatch", "same tab"],
+  ])("reports a safe action for GitHub's %s without exposing its response", async (error, expected) => {
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+      error, error_description: "sensitive-provider-detail", access_token: null,
+    }));
+    const { params } = await complete(createAuth(store, env, fetcher));
+    expect(params.get("error")).toContain(expected);
+    expect(params.toString()).not.toContain("sensitive-provider-detail");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect((await store.readAdmin()).profiles).toEqual({});
+  });
+  it("never exposes an unknown provider error or accepts a malformed token", async () => {
+    for (const response of [{error: "sensitive-provider-detail"}, {access_token: {unexpected: "value"}}, null]) {
+      const {params} = await complete(createAuth(store, env, async () => Response.json(response)));
+      expect(params.get("error")).toBe("GitHub could not complete this sign-in. Start again.");
+      expect(params.has("code")).toBe(false);
+    }
+    expect((await store.readAdmin()).profiles).toEqual({});
+  });
   it("exchanges once, refuses an incorrect verifier without consuming, and stores only session hashes", async () => {
     const auth = createAuth(store, env, github()),
       { params } = await complete(auth),
