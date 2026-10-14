@@ -3,14 +3,11 @@ import { readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { AppScopeError, validateInstallation, validateRepositories } from './github-app-scope.mjs';
 
 const org = 'scida-science';
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const configPath = fileURLToPath(new URL('../backend/wrangler.jsonc', import.meta.url));
-const requiredRepositories = [
-  'scida-admin', 'discovery-ai-001', 'discovery-ai-002', 'discovery-ai-003',
-  'discovery-ast-001', 'discovery-ast-002', 'discovery-ast-003',
-];
 const expectedPermissions = { contents: 'write', issues: 'write', metadata: 'read', emails: 'read' };
 class SetupError extends Error {}
 const fail = (message) => { throw new SetupError(message); };
@@ -99,7 +96,7 @@ function jwt(appId, key) {
   return message + '.' + sign('RSA-SHA256', Buffer.from(message), key).toString('base64url');
 }
 
-async function verifyRepositories(installationId, appToken) {
+async function verifyRepositories(installationId, appToken, selection) {
   const issued = await github(`/app/installations/${installationId}/access_tokens`, {
     token: appToken, method: 'POST', body: { permissions: { metadata: 'read' } },
     label: 'Temporary installation-token creation',
@@ -122,22 +119,8 @@ async function verifyRepositories(installationId, appToken) {
       if (repositories.length > data.total_count || data.repositories.length === 0)
         fail('The installation repository list changed during verification. Retry setup.');
     }
-    if (!complete) fail('The selected installation has too many repositories to verify.');
-    const names = new Set();
-    for (const repository of repositories) {
-      if (!object(repository) || repository.private !== true || repository.archived !== false ||
-        repository.disabled !== false || repository.owner?.type !== 'Organization' ||
-        repository.owner?.login?.toLowerCase() !== org || typeof repository.name !== 'string' ||
-        !(repository.name === 'scida-admin' || /^discovery-[a-z0-9][a-z0-9._-]*$/.test(repository.name)) ||
-        names.has(repository.name))
-        fail('Select only active private scida-admin and discovery-* repositories in scida-science.');
-      if (repository.name.startsWith('discovery-') && repository.has_issues !== true)
-        fail('Enable Issues on every selected discovery repository.');
-      names.add(repository.name);
-    }
-    if (requiredRepositories.some((name) => !names.has(name)))
-      fail('Select scida-admin and all six existing discovery repositories before continuing.');
-    return [...names].sort();
+    if (!complete) fail('The installation has too many repositories to verify.');
+    return validateRepositories(repositories, selection);
   } finally {
     await github('/installation/token', {
       token, method: 'DELETE', label: 'Temporary installation-token revocation',
@@ -159,12 +142,8 @@ async function configure(slug, pemPath) {
   const installation = await github(`/orgs/${org}/installation`, {
     token: appToken, label: 'Organization installation verification',
   });
-  if (!object(installation) || !numericId(installation.id) || installation.app_id !== app.id ||
-    installation.account?.login?.toLowerCase() !== org || installation.account?.type !== 'Organization' ||
-    installation.target_type !== 'Organization' || installation.target_id !== installation.account?.id ||
-    installation.suspended_at !== null || installation.repository_selection !== 'selected')
-    fail('Install this App in scida-science using Only select repositories, and keep it active.');
-  const names = await verifyRepositories(installation.id, appToken);
+  const selection = validateInstallation(installation, app.id);
+  const names = await verifyRepositories(installation.id, appToken, selection);
   let config = await readFile(configPath, 'utf8');
   const identifiers = {
     GITHUB_APP_ID: String(app.id), GITHUB_CLIENT_ID: app.client_id,
@@ -176,9 +155,10 @@ async function configure(slug, pemPath) {
     config = config.replace(pattern, (_, prefix) => prefix + JSON.stringify(value));
   }
   await writeFile(configPath, config, 'utf8');
-  console.log('Verified App ownership, permissions, and selected private repositories.');
+  console.log('Verified App ownership, permissions, and private storage repositories.');
   console.log('Public identifiers: ' + JSON.stringify(identifiers));
-  console.log('Selected repositories: ' + names.join(', '));
+  console.log('Installation repository scope: ' + selection);
+  console.log('Private storage repositories: ' + names.join(', '));
   console.log('Uploading the private key directly to Wrangler; its value will not be displayed.');
   const result = spawnSync(process.execPath, [
     fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url)),
@@ -196,7 +176,7 @@ async function configure(slug, pemPath) {
 const args = process.argv.slice(2);
 if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
   console.log('Usage: node scripts/configure-github-app.mjs <publicAppURLorSlug> <absolutePemFilePath>');
-  console.log('Verifies scida-science ownership and private installation scope, saves public App identifiers,');
+  console.log('Verifies scida-science ownership and private storage in an All or Selected installation, saves public App identifiers,');
   console.log('and uploads the downloaded PEM through Wrangler stdin. Keep the PEM outside this repository.');
 } else if (args.length !== 2) {
   console.error('Usage: node scripts/configure-github-app.mjs <publicAppURLorSlug> <absolutePemFilePath>');
@@ -204,7 +184,7 @@ if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
 } else {
   try { await configure(appSlug(args[0]), args[1]); }
   catch (error) {
-    console.error(error instanceof SetupError ? error.message : 'App setup failed because of an unexpected local or network error. No secret values were printed.');
+    console.error(error instanceof SetupError || error instanceof AppScopeError ? error.message : 'App setup failed because of an unexpected local or network error. No secret values were printed.');
     process.exitCode = 1;
   }
 }

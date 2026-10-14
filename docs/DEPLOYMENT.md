@@ -4,7 +4,7 @@ The frontend stays at **https://scida-science.github.io/**. The deployed API ori
 
 **Use Workers Free only, with $0 recurring costs. Do not enable a paid plan or chargeable overages.** Workers Free allows 100,000 requests per day and 10 ms of CPU time per invocation; time spent waiting for network responses is separate from CPU time. Real authentication, GitHub reads/writes, and cryptographic operations still need testing on the deployed Worker. If limits cause failures, record the failing route and runtime outcome, measure where available, and optimize before considering another hosting option. [Cloudflare pricing](https://developers.cloudflare.com/workers/platform/pricing/), [CPU limits](https://developers.cloudflare.com/workers/platform/limits/).
 
-The website source and seven private repositories have been provisioned, and the Worker shell has been deployed. GitHub App registration, installation, and credentials are pending. A successful deployment does not establish that real OAuth or shared writes work. The Cloudflare subscription API returned `403`, so the account's billing plan has not been independently verified; `default_usage_model: standard` is not proof of Workers Free. Confirm **Workers Free** in the Cloudflare dashboard without changing the plan. Complete the following steps using the organization owner's GitHub account and your Cloudflare account.
+The website source and seven private repositories have been provisioned, and the Worker shell has been deployed. The [SciDA Research Portal GitHub App](https://github.com/apps/scida-research-portal) is registered under `scida-science`; its public permissions have been verified. Installation and credentials remain pending verification and connection. A successful deployment does not establish that real OAuth or shared writes work. The owner confirmed **Workers Free** in the Cloudflare dashboard on 14 October 2026. The subscription API returned `403`, so this confirmation comes from the owner; `default_usage_model: standard` alone does not establish a billing plan. Complete the following steps using the organization owner's GitHub account and your Cloudflare account.
 
 ## 1. Confirm private storage and organization access
 
@@ -53,12 +53,14 @@ In [backend/wrangler.jsonc](../backend/wrangler.jsonc), keep `API_ORIGIN` exactl
 
 Open [Register a new GitHub App in scida-science](https://github.com/organizations/scida-science/settings/apps/new) and register a **GitHub App** owned by `scida-science`.
 
+The production App is already registered: [SciDA Research Portal](https://github.com/apps/scida-research-portal), App ID `5318606`, Client ID `Iv23liWvIlvAJaPfQb6f`. These are public identifiers. Use the existing App; the settings below document its required configuration.
+
 Configure:
 
 - Suggested App name: `SciDA Research Portal` (GitHub requires a globally unique name).
 - Description: `Scientific Discovery Agent research portal`.
 - Homepage URL: `https://scida-science.github.io/`.
-- Callback URL: **`https://scida-api.scida-website.workers.dev/auth/callback`**.
+- Redirect URI (also called Callback URL): **`https://scida-api.scida-website.workers.dev/auth/callback`**.
 - Callback wildcard matching: **disabled**; the callback must match exactly. [Callback URL settings](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url).
 - Request user authorization (OAuth) during installation: **unchecked**. Users must begin sign-in through SciDA so the required sign-in cookie and state exist.
 - Setup URL: leave blank. Redirect on update: unchecked.
@@ -81,7 +83,9 @@ Account email permission is needed to verify the researcher's primary email thro
 
 Record the public App ID and Client ID, generate a client secret, and generate/download a private key. Enter the client secret only in the local Wrangler prompt described below; do not paste it into a conversation. Keep the downloaded PEM file outside this public repository and provide only its local file path when arranging the upload. The Worker accepts GitHub's downloaded PKCS#1 PEM and PKCS#8 PEM, including multiline values.
 
-Install the App in **scida-science** with **Only select repositories**, selecting exactly `scida-admin` and the six private discovery repositories listed above. Do not select the public `scida-science.github.io` source repository. Record the numeric installation ID from the installation's settings URL. Researchers authorize sign-in; they do not need to install the App themselves or join the organization.
+Install the App in **scida-science** with **All repositories**, as requested by the owner, so future discovery repositories are included automatically. This grants the App its Contents and Issues permissions across all current and future organization repositories, including the public website source. SciDA's backend uses `scida-admin` for administrative storage and discovers only private, unarchived `discovery-*` repositories; unrelated repositories are not imported into SciDA. Record the numeric installation ID from the installation's settings URL. Researchers authorize sign-in; they do not need to install the App themselves or join the organization. [GitHub repository-access settings](https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps#modifying-repository-access).
+
+The setup helper also supports **Only select repositories** if this policy changes later. With that choice, select `scida-admin` and the six private discovery repositories, then explicitly add each future discovery repository to the installation.
 
 ## 4. Set identifiers and Worker secrets
 
@@ -91,7 +95,7 @@ After registration and installation, the local helper can verify the App and fil
 node scripts/configure-github-app.mjs 'https://github.com/apps/YOUR-APP-SLUG' 'C:\Users\sarve\Downloads\YOUR-APP.private-key.pem'
 ```
 
-It verifies organization ownership, the matching private key, App permissions, and the selected private repository scope. It then uploads the key directly through Wrangler's standard input. It does not display or copy the key into the project, and it revokes the temporary repository-verification token. The helper still needs testing with the actual registered App; syntax and local path safeguards have been checked. Run the client-secret prompt below separately, then deploy the completed Worker.
+It verifies organization ownership, the matching private key, App permissions, installation scope, and required private storage repositories. It accepts All repositories and ignores unrelated repositories during storage verification. It then uploads the key directly through Wrangler's standard input. It does not display or copy the key into the project, and it revokes the temporary repository-verification token. The helper still needs testing with the actual registered App; syntax and local path safeguards have been checked. Run the client-secret prompt below separately, then deploy the completed Worker.
 
 Fill in the public identifiers in `backend/wrangler.jsonc`:
 
@@ -187,7 +191,7 @@ Passing local tests or `/health` alone does not complete these checks. Record th
 
 1. As organization owner, create a **private** repository named `discovery-<stable-name>` under `scida-science`; keep Issues enabled and the repository unarchived.
 2. Put a valid `discovery.json` on its default branch. Copy the structure of an existing illustrative record, replace its content carefully, and choose a unique stable `discovery.id`. Use explicit `visibility: "signed-in"` for new work. Public visibility is a deliberate publication decision.
-3. Add this repository to the existing GitHub App installation's **selected repositories**. It does not require granting the researcher repository access.
+3. With the production installation set to **All repositories**, the new repository is included automatically. If using a restricted installation instead, add it to that installation's selected repositories. It does not require granting the researcher repository access.
 4. Refresh SciDA. The Worker discovers installed private `discovery-*` repositories automatically; no website rebuild or repository-name list needs updating.
 
 Use [discovery.schema.json](discovery.schema.json) for the format. IDs must be unique across all discovery repositories. An invalid configuration produces an error, so validate the document before committing. Keep scientific prose consistent with the reference papers in the corresponding research project's `writing_style/` directory when editing actual research; the existing illustrative prose is unchanged by backend setup.
