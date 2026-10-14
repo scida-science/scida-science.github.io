@@ -691,6 +691,44 @@ describe("discussions and code requests", () => {
 });
 
 describe("discovery content, visibility, and materials", () => {
+  it("exposes only listed figures, follows brief visibility, and preserves paths during browser edits", async () => {
+    const d = store.records[0].document.discovery;
+    d.question = "What survives the controls?";
+    d.figures = [{ id: "measurement", path: "assets/measurement.png", caption: "Measured values with uncertainties.", alt: "Error bars on measured values.", sectionId: d.sections[0].id }];
+    d.headlineFigureId = "measurement";
+    Object.assign(d.figures[0], { internalNote: "not for readers" });
+    const brief = (await domain.portal(null)).state.discoveries.find((r) => r.id === d.id)!;
+    expect(brief.question).toBe(d.question);
+    expect(brief.figures![0]).not.toHaveProperty("internalNote");
+    expect((await domain.authorizeFigure(null, d.id, "measurement")).figure.path).toBe("assets/measurement.png");
+    await denied(domain.authorizeFigure(null, d.id, "../internal/claims.json"), 404);
+    const draft = editable();
+    draft.figures![0].path = "internal/private.png";
+    await domain.updateDiscovery(OWNER, draft);
+    expect(store.records[0].document.discovery.figures![0].path).toBe("assets/measurement.png");
+    store.records[0].document.visibility = "signed-in";
+    await denied(domain.authorizeFigure(null, d.id, "measurement"), 404);
+    expect((await domain.authorizeFigure(READER, d.id, "measurement")).figure.id).toBe("measurement");
+  });
+
+  it.each(["../secret.png", "/secret.png", "a//b.png", "a%2fb.png", "a.svg", "a\\b.png"])("rejects unsafe evidence asset %s", (path) => {
+    const d = store.records[0].document.discovery;
+    d.figures = [{ id: "one", path, caption: "Caption", alt: "Alternative text", sectionId: d.sections[0].id }];
+    expect(validDiscoveryDocument(store.records[0].document)).toBe(false);
+  });
+
+  it("rejects missing headline and section targets and duplicate figure IDs", () => {
+    const d = store.records[0].document.discovery;
+    d.figures = [{ id: "one", path: "assets/one.png", caption: "Caption", alt: "Alternative text", sectionId: d.sections[0].id }];
+    d.headlineFigureId = "missing";
+    expect(validDiscoveryDocument(store.records[0].document)).toBe(false);
+    d.headlineFigureId = "one";
+    d.figures[0].sectionId = "missing";
+    expect(validDiscoveryDocument(store.records[0].document)).toBe(false);
+    d.figures[0].sectionId = d.sections[0].id;
+    d.figures.push(copy(d.figures[0]));
+    expect(validDiscoveryDocument(store.records[0].document)).toBe(false);
+  });
   it("projects only public brief fields and strips unknown nested repository annotations", async () => {
     Object.assign(store.records[0].document, {
       privateConfiguration: "PRIVATE TOP-LEVEL CONFIG",

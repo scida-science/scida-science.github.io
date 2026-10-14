@@ -17,6 +17,7 @@ import { topics } from "../data/discoveries";
 import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
+import EvidenceFigure from "../components/EvidenceFigure";
 import type { ActionResult, Discovery } from "../types";
 
 const Equation = lazy(() => import("../components/Equation"));
@@ -217,6 +218,9 @@ function ResearchBrief({ discovery }: { discovery: Discovery }) {
           <div>
             <h2>{s.title}</h2>
             <p>{s.body}</p>
+            {discovery.figures?.filter((f) => f.sectionId === s.id).map((f) => (
+              <EvidenceFigure key={f.id} discoveryId={discovery.id} figure={f} revision={discovery.revision ?? discovery.updatedAt} />
+            ))}
             {s.equation && (
               <Suspense
                 fallback={
@@ -284,6 +288,7 @@ export default function DiscoveryPage() {
           <StatusBadge status={discovery.status} />
         </div>
         <h1>{discovery.title}</h1>
+        {discovery.question && <p className="discovery-question">{discovery.question}</p>}
         <p className="discovery-lead">{discovery.summary}</p>
         <div className="discovery-meta">
           {discovery.illustrative && (

@@ -20,6 +20,9 @@ export interface Section {
   equation?: string;
 }
 export interface Discovery {
+  question?: string;
+  headlineFigureId?: string;
+  figures?: EvidenceFigure[];
   /** API-only source revision, used to prevent overwriting newer GitHub edits. */
   revision?: string;
   restrictedMaterials?: Array<keyof Discovery["materials"]>;
@@ -41,6 +44,14 @@ export interface Discovery {
     data: string | null;
     repository: string | null;
   };
+}
+export interface EvidenceFigure {
+  id: string;
+  /** Repository-relative PNG, served through the authorized evidence endpoint. */
+  path: string;
+  caption: string;
+  alt: string;
+  sectionId: string;
 }
 export interface Profile {
   id: string;

@@ -108,6 +108,15 @@ export async function handleRequest(
       if (path === "/v1/portal" && request.method === "GET")
         response = json(await domain.portal(userId));
       else if (
+        parts.length === 5 && parts[0] === "v1" && parts[1] === "discoveries" &&
+        parts[3] === "evidence" && request.method === "GET"
+      ) {
+        const { record, figure } = await domain.authorizeFigure(userId, parts[2], parts[4]);
+        if (!(store instanceof GitHubRepositoryStore))
+          throw new HttpError(501, "Figure transport is unavailable in this test adapter.");
+        response = await store.figureFile(record, figure.path);
+      }
+      else if (
         parts.length === 5 &&
         parts[0] === "v1" &&
         parts[1] === "discoveries" &&

@@ -176,6 +176,10 @@ export function createPortalService(
   };
 
   const actions = {
+    async loadFigure(discoveryId: string, figureId: string): Promise<Blob> {
+      if (!repo) throw new Error("Evidence figures require connected account services.");
+      return repo.loadFigure(discoveryId, figureId);
+    },
     refresh,
     async signInWithGitHub(): Promise<ActionResult> {
       if (!client || !auth) return missingBackend();

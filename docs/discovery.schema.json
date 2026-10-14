@@ -4,14 +4,22 @@
   "description": "Store as discovery.json at the root of an approved private discovery-* repository. This describes research metadata and owner-managed material access. Use explicit visibility: signed-in is the conservative choice; public deliberately exposes the brief and its discussion through SciDA. This file contains no accounts or credentials.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "visibility", "discovery", "materials"],
+  "required": [
+    "schemaVersion",
+    "visibility",
+    "discovery",
+    "materials"
+  ],
   "properties": {
     "schemaVersion": {
       "const": 1
     },
     "visibility": {
       "type": "string",
-      "enum": ["public", "signed-in"],
+      "enum": [
+        "public",
+        "signed-in"
+      ],
       "default": "signed-in"
     },
     "discovery": {
@@ -30,7 +38,10 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["path", "access"],
+          "required": [
+            "path",
+            "access"
+          ],
           "properties": {
             "path": {
               "type": "string",
@@ -47,7 +58,10 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["url", "access"],
+          "required": [
+            "url",
+            "access"
+          ],
           "properties": {
             "url": {
               "type": "string",
@@ -65,13 +79,24 @@
     },
     "materialAccess": {
       "type": "string",
-      "enum": ["public", "reader", "reviewer", "admin"],
+      "enum": [
+        "public",
+        "reader",
+        "reviewer",
+        "admin"
+      ],
       "description": "Public still requires visibility to the discovery. Reader requires sign-in. Reviewer requires approval for this discovery topic (also applies to the owner). Admin requires the configured owner GitHub ID."
     },
     "materialMap": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["paper", "appendix", "figures", "data", "repository"],
+      "required": [
+        "paper",
+        "appendix",
+        "figures",
+        "data",
+        "repository"
+      ],
       "properties": {
         "paper": {
           "$ref": "#/$defs/material",
@@ -98,7 +123,11 @@
     "section": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "body"],
+      "required": [
+        "id",
+        "title",
+        "body"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -128,7 +157,13 @@
     "legacyMaterials": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["paper", "appendix", "figures", "data", "repository"],
+      "required": [
+        "paper",
+        "appendix",
+        "figures",
+        "data",
+        "repository"
+      ],
       "description": "Compatibility slots for the shared frontend Discovery type. Keep all null in repository documents; returned URLs are generated from the authoritative top-level materials map.",
       "properties": {
         "paper": {
@@ -234,7 +269,10 @@
           "pattern": "\\S"
         },
         "field": {
-          "enum": ["Astronomy", "Artificial Intelligence"]
+          "enum": [
+            "Astronomy",
+            "Artificial Intelligence"
+          ]
         },
         "topic": {
           "enum": [
@@ -247,7 +285,11 @@
           ]
         },
         "status": {
-          "enum": ["Awaiting Validation", "Validated", "Published"]
+          "enum": [
+            "Awaiting Validation",
+            "Validated",
+            "Published"
+          ]
         },
         "summary": {
           "type": "string",
@@ -288,6 +330,26 @@
         "illustrative": {
           "type": "boolean",
           "description": "Keep true for placeholder research. Workflow labels do not establish actual validation or publication."
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "\\S",
+          "description": "Short scientific question shown on the scrolling and detail pages."
+        },
+        "headlineFigureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,79}$",
+          "description": "Must identify one member of figures; shown on the scrolling page."
+        },
+        "figures": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/evidenceFigure"
+          },
+          "description": "Selected PNG evidence assets, visible to everyone who can see the brief. IDs must be unique and sectionId must identify an existing section."
         }
       },
       "allOf": [
@@ -302,7 +364,11 @@
           "then": {
             "properties": {
               "topic": {
-                "enum": ["bandit-theory", "machine-learning", "scientific-ai"]
+                "enum": [
+                  "bandit-theory",
+                  "machine-learning",
+                  "scientific-ai"
+                ]
               }
             }
           }
@@ -328,6 +394,54 @@
           }
         }
       ]
+    },
+    "evidenceFigure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "caption",
+        "alt",
+        "sectionId"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,79}$"
+        },
+        "path": {
+          "allOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\%?#:\\x00-\\x1F\\x7F])[^/]+(?:/[^/]+)*$",
+              "description": "Repository-relative file path. No traversal, encoded segments, backslashes, controls, or URL query/fragment syntax."
+            },
+            {
+              "pattern": "\\.png$"
+            }
+          ]
+        },
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000,
+          "pattern": "\\S"
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500,
+          "pattern": "\\S"
+        },
+        "sectionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
     }
   }
 }

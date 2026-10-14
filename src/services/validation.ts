@@ -98,6 +98,8 @@ export function validDiscovery(value: unknown): value is Discovery {
     topicIds.includes(value.topic as TopicId) &&
     stages.includes(value.status as string) &&
     nonempty(value.summary, 3000) &&
+    (value.question === undefined || nonempty(value.question, 500)) &&
+    validEvidence(value) &&
     nonempty(value.updatedAt, 60) &&
     Number.isFinite(Date.parse(value.updatedAt)) &&
     nonempty(value.version, 40) &&
@@ -124,4 +126,20 @@ export function validDiscovery(value: unknown): value is Discovery {
           validUrl(value.materials[key], false)),
     )
   );
+}
+
+function validEvidence(value: Record<string, unknown>): boolean {
+  if (value.figures === undefined) return value.headlineFigureId === undefined;
+  if (!Array.isArray(value.figures) || value.figures.length > 12) return false;
+  const sections = Array.isArray(value.sections) ? value.sections : [];
+  if (!value.figures.every((figure) => object(figure) &&
+    typeof figure.id === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(figure.id) &&
+    nonempty(figure.path, 1000) && figure.path.endsWith(".png") &&
+    !/[\\%?#:\x00-\x1f\x7f]/u.test(figure.path) &&
+    figure.path.split("/").every((s) => !!s && s !== "." && s !== "..") &&
+    nonempty(figure.caption, 3000) && nonempty(figure.alt, 1500) &&
+    sections.some((s) => object(s) && s.id === figure.sectionId))) return false;
+  return new Set(value.figures.map((f) => f.id)).size === value.figures.length &&
+    (value.headlineFigureId === undefined ||
+      value.figures.some((f) => f.id === value.headlineFigureId));
 }

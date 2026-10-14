@@ -765,6 +765,20 @@ describe("Authenticated, versioned GitHub discussions", () => {
 });
 
 describe("GitHub material boundary and upstream failures", () => {
+  it("serves listed PNG bytes with safe inline image headers", async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const { store } = harness(() => new Response(bytes, { headers: { "Set-Cookie": "private" } }));
+    const response = await store.figureFile(record(), "assets/plot.png");
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("rejects active content disguised as a PNG", async () => {
+    const { store } = harness(() => new Response("<svg onload='alert(1)'></svg>"));
+    await expect(store.figureFile(record(), "assets/plot.png")).rejects.toMatchObject({ status: 415 });
+  });
   it("streams private material as a safe attachment without forwarding credentials, cookies, or redirect locations", async () => {
     const { store, fetcher } = harness(
       () =>

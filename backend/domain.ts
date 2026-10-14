@@ -285,6 +285,11 @@ export function createDomain(
             topic: source.topic,
             status: source.status,
             summary: source.summary,
+            ...(source.question === undefined ? {} : { question: source.question }),
+            ...(source.headlineFigureId === undefined ? {} : { headlineFigureId: source.headlineFigureId }),
+            ...(source.figures === undefined ? {} : { figures: source.figures.map((f) => ({
+              id: f.id, path: f.path, caption: f.caption, alt: f.alt, sectionId: f.sectionId,
+            })) }),
             updatedAt: source.updatedAt,
             version: source.version,
             reviewNote: source.reviewNote,
@@ -633,6 +638,8 @@ export function createDomain(
       // Browser display URLs are never written back into that configuration.
       const candidate = {
         ...input,
+        figures: clone(record.document.discovery.figures),
+        headlineFigureId: record.document.discovery.headlineFigureId,
         materials: clone(record.document.discovery.materials),
         updatedAt: iso(),
       } as unknown as Discovery;
@@ -649,6 +656,9 @@ export function createDomain(
         topic: candidate.topic,
         status: candidate.status,
         summary: candidate.summary,
+        ...(candidate.question === undefined ? {} : { question: candidate.question }),
+        ...(candidate.headlineFigureId === undefined ? {} : { headlineFigureId: candidate.headlineFigureId }),
+        ...(candidate.figures === undefined ? {} : { figures: candidate.figures }),
         updatedAt: candidate.updatedAt,
         version: candidate.version,
         reviewNote: candidate.reviewNote,
@@ -710,6 +720,14 @@ export function createDomain(
           assignedTopics,
         });
       });
+    },
+    async authorizeFigure(userId: string | null, discoveryId: unknown, figureId: unknown) {
+      const record = await discovery(discoveryId);
+      const current = getUser(await store.readAdmin(), userId);
+      visible(current, record);
+      const figure = record.document.discovery.figures?.find((f) => f.id === figureId);
+      if (!figure) throw new HttpError(404, "Evidence figure not found.");
+      return { record: clone(record), figure: clone(figure) };
     },
     async authorizeMaterial(
       userId: string | null,

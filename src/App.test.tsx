@@ -59,6 +59,7 @@ beforeEach(() => {
     loading: false,
     error: null,
     signInWithGitHub: success(),
+    loadFigure: vi.fn().mockResolvedValue(new Blob([], { type: "image/png" })),
     downloadMaterial: success(),
     signOut: success(),
     refresh: success(),
@@ -91,6 +92,24 @@ afterEach(() => {
 });
 
 describe("Public research and real account interface", () => {
+  it("renders repository questions, evidence alt text and captions on the card and detail page", async () => {
+    const d = portal.state.discoveries[0];
+    d.question = "Does the signal survive the controls?";
+    d.figures = [{ id: "plot", path: "assets/plot.png", caption: "Measured points with conditional errors.", alt: "Measured points and uncertainty bars.", sectionId: d.sections[0].id }];
+    d.headlineFigureId = "plot";
+    const create = vi.fn(() => "blob:local-evidence");
+    const revoke = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }));
+    const view = openApp();
+    expect(screen.getByText(d.question)).toBeTruthy();
+    expect(await screen.findByAltText(d.figures[0].alt)).toBeTruthy();
+    expect(screen.getByText(d.figures[0].caption)).toBeTruthy();
+    view.unmount();
+    expect(revoke).toHaveBeenCalledWith("blob:local-evidence");
+    openApp(`/discoveries/${d.id}`);
+    expect(await screen.findByAltText(d.figures[0].alt)).toBeTruthy();
+    expect(screen.getByText(d.figures[0].caption)).toBeTruthy();
+  });
   it("browses without login or selectable identities and combines field, status, and keyboard filters", async () => {
     const interaction = userEvent.setup();
     openApp();

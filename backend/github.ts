@@ -495,6 +495,36 @@ export class GitHubRepositoryStore implements GitHubStore {
       "The parent discussion changed. Refresh and try again.",
     );
   }
+  async figureFile(record: StoredDiscovery, path: string): Promise<Response> {
+    // General supporting materials retain attachment-only transport.
+    const file = await this.materialFile(record, path);
+    const reader = file.body?.getReader();
+    if (!reader) throw new HttpError(415, "Evidence figure is empty.");
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 16 * 1024 * 1024) {
+        await reader.cancel();
+        throw new HttpError(415, "Evidence figure exceeds 16 MiB.");
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (!path.endsWith(".png") || bytes.length > 16 * 1024 * 1024 ||
+      !signature.every((v, i) => bytes[i] === v))
+      throw new HttpError(415, "Evidence figure must be a PNG under 16 MiB.");
+    return new Response(bytes, { headers: {
+      "Content-Type": "image/png", "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Referrer-Policy": "no-referrer",
+    } });
+  }
   async materialFile(record: StoredDiscovery, path: string): Promise<Response> {
     const response = await this.api.raw(
       `${this.repoPath(record.repository)}/contents/${pathParts(path)}`,

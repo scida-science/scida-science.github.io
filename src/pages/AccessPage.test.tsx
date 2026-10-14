@@ -44,6 +44,7 @@ beforeEach(() => {
     configured: true,
     loading: false,
     error: null,
+    loadFigure: vi.fn().mockResolvedValue(new Blob([], { type: "image/png" })),
     signInWithGitHub: success(), downloadMaterial: success(), signOut: success(),
     refresh: success(), saveProfile: success(), applyForReview: success(),
     reviewApplication: success(), createInvitation: success(),

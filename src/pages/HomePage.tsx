@@ -1,4 +1,5 @@
 import { useState } from "react";
+import EvidenceFigure from "../components/EvidenceFigure";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -190,7 +191,11 @@ export default function HomePage() {
                     {d.title}
                     <ArrowUpRight size={22} />
                   </h2>
+                  {d.question && <p className="discovery-question">{d.question}</p>}
                   <p className="discovery-summary">{d.summary}</p>
+                  {d.figures?.filter((f) => f.id === d.headlineFigureId).map((f) => (
+                    <EvidenceFigure key={f.id} discoveryId={d.id} figure={f} revision={d.revision ?? d.updatedAt} />
+                  ))}
                   <div className="review-note">
                     <span>
                       {d.status === "Awaiting Validation" ? (

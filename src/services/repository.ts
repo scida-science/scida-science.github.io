@@ -112,6 +112,14 @@ export function createPortalRepository(client: ApiClient) {
         approvedTopics,
         assignedTopics,
       }),
+    loadFigure: async (discoveryId: string, figureId: string): Promise<Blob> => {
+      const result = await client.download(
+        `/v1/discoveries/${encodeURIComponent(discoveryId)}/evidence/${encodeURIComponent(figureId)}`,
+      );
+      if (!result.blob || result.blob.type !== "image/png")
+        throw new Error("Evidence figure is unavailable.");
+      return result.blob;
+    },
     downloadMaterial: (
       discoveryId: string,
       kind: keyof Discovery["materials"],
