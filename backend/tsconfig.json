@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["*.ts", "../src/types.ts", "../src/services/validation.ts"],
+  "exclude": ["*.test.ts"]
+}

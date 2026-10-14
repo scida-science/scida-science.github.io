@@ -35,10 +35,7 @@ export default function DiscoveryEditor({
         onSubmit={async (e) => {
           e.preventDefault();
           setPending(true);
-          const result = await updateDiscovery({
-            ...draft,
-            updatedAt: new Date().toISOString(),
-          });
+          const result = await updateDiscovery(draft);
           setPending(false);
           setMessage(result.message);
           if (result.ok) onClose();
@@ -174,7 +171,14 @@ export default function DiscoveryEditor({
             </label>
           </fieldset>
         ))}
-        <h3 className="field-full">Supporting material URLs</h3>
+        <div className="field-full">
+          <h3>Supporting materials</h3>
+          <p className="muted">
+            Manage material paths, external links, and access rules in the
+            private discovery repository’s <code>discovery.json</code>. Saving
+            this research brief preserves that configuration.
+          </p>
+        </div>
         {(
           Object.keys(draft.materials) as Array<keyof Discovery["materials"]>
         ).map((key) => (
@@ -185,14 +189,13 @@ export default function DiscoveryEditor({
                 ? "Full paper"
                 : key.charAt(0).toUpperCase() + key.slice(1)}
             <input
-              type="url"
-              placeholder="Leave empty until uploaded"
-              value={draft.materials[key] ?? ""}
-              onChange={(e) =>
-                set("materials", {
-                  ...draft.materials,
-                  [key]: e.target.value || null,
-                })
+              readOnly
+              value={
+                draft.materials[key]
+                  ? "Available"
+                  : draft.restrictedMaterials?.includes(key)
+                    ? "Restricted material"
+                    : "Not uploaded yet"
               }
             />
           </label>

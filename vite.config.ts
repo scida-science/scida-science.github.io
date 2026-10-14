@@ -1,63 +1,33 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-
-// Organization homepage repository: https://<organization>.github.io/.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
-  const url = env.VITE_SUPABASE_URL?.trim();
-  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
-  // Fail before bundling: a runtime check would expose a privileged key first.
-  if (url || key) {
-    if (!url || !key)
+  for (const key of Object.keys(env))
+    if (key !== "VITE_SCIDA_API_URL")
       throw new Error(
-        "Configure both Supabase public environment variables, or leave both unset.",
+        "Only VITE_SCIDA_API_URL is allowed in browser configuration.",
       );
-    const parsed = new URL(url);
+  if (env.VITE_SCIDA_API_URL) {
+    const url = new URL(env.VITE_SCIDA_API_URL);
     if (
-      (parsed.protocol !== "https:" &&
+      (url.protocol !== "https:" &&
         !(
-          parsed.protocol === "http:" &&
-          ["localhost", "127.0.0.1"].includes(parsed.hostname)
+          url.protocol === "http:" &&
+          ["127.0.0.1", "localhost"].includes(url.hostname)
         )) ||
-      parsed.username ||
-      parsed.password ||
-      parsed.search ||
-      parsed.hash ||
-      parsed.pathname !== "/"
-    ) {
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== "/"
+    )
       throw new Error(
-        "Invalid Supabase project URL. Use HTTPS or a local development endpoint.",
+        "VITE_SCIDA_API_URL must be a public HTTPS backend origin or localhost.",
       );
-    }
-    if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
-      let role: string | undefined;
-      try {
-        const parts = key.split(".");
-        if (parts.length === 3)
-          role = JSON.parse(
-            atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
-          ).role;
-      } catch {
-        /* Reject invalid or privileged keys without printing their value. */
-      }
-      if (role !== "anon")
-        throw new Error(
-          "Refusing to bundle a secret or invalid Supabase key. Supply a publishable key or legacy anon key only.",
-        );
-    }
   }
   return {
     plugins: [react()],
     base: "/",
-    build: {
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            math: ["katex"],
-            supabase: ["@supabase/supabase-js"],
-          },
-        },
-      },
-    },
+    build: { rollupOptions: { output: { manualChunks: { math: ["katex"] } } } },
   };
 });

@@ -1,6 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { discoveries } from "../data/discoveries";
-import { authRedirectUrl } from "../lib/supabase";
+import { ApiError, type ApiClient } from "../lib/api";
 import type {
   ActionResult,
   CommentInput,
@@ -12,11 +11,7 @@ import type {
   Role,
   TopicId,
 } from "../types";
-import {
-  clearRecoveryMarker,
-  completeAuthCallback,
-  verifiedAuthUser,
-} from "./auth";
+import { createGitHubAuth, type GitHubAuth } from "./auth";
 import {
   canDiscuss,
   canManageTopic,
@@ -40,25 +35,42 @@ export interface PortalSnapshot {
   configured: boolean;
   loading: boolean;
   error: string | null;
-  recoveryMode: boolean;
 }
-
+export interface PortalDependencies {
+  repository?: PortalRepository;
+  auth?: GitHubAuth;
+  navigate?: (url: string) => void;
+  saveDownload?: (blob: Blob, filename: string) => void;
+}
 const reason = (error: unknown) =>
   error &&
   typeof error === "object" &&
   "message" in error &&
   typeof error.message === "string"
     ? error.message
-    : "The server could not complete this request. Please try again.";
+    : "The SciDA service could not complete this request. Please try again.";
 const bounded = (value: string, max: number) =>
   value.trim().length > 0 && value.length <= max;
+function saveDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 export function createPortalService(
-  client: SupabaseClient | null,
+  client: ApiClient | null,
   configurationError: string | null = null,
-  repository?: PortalRepository,
+  dependencies: PortalDependencies = {},
 ) {
-  const repo = repository ?? (client ? createPortalRepository(client) : null);
+  const repo =
+    dependencies.repository ?? (client ? createPortalRepository(client) : null);
+  const auth = dependencies.auth ?? (client ? createGitHubAuth(client) : null);
   const listeners = new Set<() => void>();
   let snapshot: PortalSnapshot = {
     state: client
@@ -68,14 +80,14 @@ export function createPortalService(
     configured: !!client,
     loading: !!client,
     error: configurationError,
-    recoveryMode: false,
   };
   let revision = 0;
   let active = false;
   let initialized = false;
-  let initialization: Promise<void> | null = null;
-  let subscription: { unsubscribe: () => void } | undefined;
-  let initializing = false;
+  let initializing: Promise<void> | null = null;
+  let unsubscribe: (() => void) | undefined;
+  let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  let refreshTimer: ReturnType<typeof setInterval> | undefined;
   const publish = (patch: Partial<PortalSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
     listeners.forEach((listener) => listener());
@@ -87,68 +99,66 @@ export function createPortalService(
   const missingBackend = () =>
     fail(
       configurationError ??
-        "Accounts and shared storage are not configured. The administrator must connect Supabase before this action is available.",
+        "Accounts and shared storage are not connected yet. The administrator must configure the SciDA API before this action is available.",
     );
-  const clearPrivate = () => ({
-    ...emptyPortalState(),
-    discoveries: snapshot.state.discoveries,
-    comments: snapshot.state.comments,
+  const changedAccount = (): ActionResult => ({
+    ok: false,
+    message:
+      "The account changed while this request was running. Refresh to check its result.",
   });
 
+  function scheduleExpiry() {
+    clearTimeout(expiryTimer);
+    const session = client?.getSession();
+    if (session && active)
+      expiryTimer = setTimeout(
+        () => {
+          client?.getSession();
+          scheduleExpiry();
+        },
+        Math.min(
+          Math.max(Date.parse(session.expiresAt) - Date.now(), 1),
+          2_147_483_647,
+        ),
+      );
+  }
   async function refresh(): Promise<ActionResult> {
     if (!client || !repo) return missingBackend();
+    const token = client.getSession()?.token;
     const request = ++revision;
     publish({ loading: true });
     try {
-      const authUser = await verifiedAuthUser(client);
-      if (request !== revision)
-        return {
-          ok: false,
-          message: "The account changed while data was loading.",
-        };
-      if (snapshot.user?.id !== authUser?.id)
-        publish({ user: null, state: clearPrivate() });
-      const result = await repo.read(authUser);
-      if (request !== revision)
-        return {
-          ok: false,
-          message:
-            "The account changed while data was loading. Please try again.",
-        };
-      publish({
-        ...result,
-        loading: false,
-        error: null,
-        recoveryMode: !!authUser && snapshot.recoveryMode,
-      });
-      return { ok: true, message: "Data refreshed from Supabase." };
+      const result = await repo.read();
+      if (request !== revision || token !== client.getSession()?.token)
+        return changedAccount();
+      publish({ ...result, loading: false, error: null });
+      scheduleExpiry();
+      return { ok: true, message: "Research portal refreshed." };
     } catch (error) {
-      if (request !== revision)
-        return {
-          ok: false,
-          message: "The account changed while data was loading.",
-        };
+      if (request !== revision) {
+        if (
+          error instanceof ApiError &&
+          error.status === 401 &&
+          !client.getSession()
+        )
+          return fail(reason(error));
+        return changedAccount();
+      }
       publish({ state: emptyPortalState(), user: null, loading: false });
       return fail(reason(error));
     }
   }
-
   async function mutate(
-    operation: (user: Profile, repository: PortalRepository) => Promise<void>,
+    operation: (repository: PortalRepository) => Promise<unknown>,
     message: string,
   ): Promise<ActionResult> {
     if (!client || !repo) return missingBackend();
-    const user = snapshot.user;
-    if (!user) return fail("Sign in with a verified account to continue.");
-    const request = revision;
+    const token = client.getSession()?.token;
+    if (!snapshot.user || !token)
+      return fail("Sign in with GitHub to continue.");
     try {
-      await operation(user, repo);
-      if (request !== revision && snapshot.user?.id !== user.id)
-        return {
-          ok: false,
-          message:
-            "Your account changed during this request. Refresh to check its result.",
-        };
+      await operation(repo);
+      if (token !== client.getSession()?.token) return changedAccount();
       const refreshed = await refresh();
       return {
         ok: true,
@@ -160,121 +170,54 @@ export function createPortalService(
       return fail(reason(error));
     }
   }
+  const refreshWhenVisible = () => {
+    if (active && !snapshot.loading && document.visibilityState === "visible")
+      void refresh();
+  };
 
   const actions = {
     refresh,
-    async signIn(email: string, password: string): Promise<ActionResult> {
-      if (!client) return missingBackend();
-      ++revision;
-      publish({
-        user: null,
-        state: clearPrivate(),
-        error: null,
-        loading: true,
-      });
+    async signInWithGitHub(): Promise<ActionResult> {
+      if (!client || !auth) return missingBackend();
       try {
-        const result = await client.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (result.error) throw result.error;
-        const loaded = await refresh();
-        return loaded.ok ? { ok: true, message: "Signed in." } : loaded;
-      } catch (error) {
-        publish({ loading: false });
-        return fail(reason(error));
-      }
-    },
-    async signUp(
-      email: string,
-      password: string,
-      fullName: string,
-    ): Promise<ActionResult> {
-      if (!client) return missingBackend();
-      if (!bounded(fullName, 120))
-        return fail("Enter your full name (up to 120 characters).");
-      try {
-        const result = await client.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            emailRedirectTo: authRedirectUrl(),
-            data: { full_name: fullName.trim() },
-          },
-        });
-        if (result.error) throw result.error;
-        if (result.data.session) await refresh();
-        else publish({ error: null });
-        return {
-          ok: true,
-          message:
-            "Check your email to confirm your account. Open the confirmation link in this same browser, then sign in.",
-        };
+        await auth.signIn();
+        publish({ error: null });
+        return { ok: true, message: "Redirecting to GitHub to sign in." };
       } catch (error) {
         return fail(reason(error));
       }
     },
     async signOut(): Promise<ActionResult> {
       if (!client) return missingBackend();
+      const token = client.getSession()?.token;
       ++revision;
+      client.clearSession();
       publish({
         user: null,
         state: emptyPortalState(),
-        recoveryMode: false,
         loading: true,
         error: null,
       });
-      clearRecoveryMarker();
       try {
-        const result = await client.auth.signOut({ scope: "local" });
-        if (result.error) throw result.error;
+        if (token) await client.request("/auth/logout", {}, { token });
         await refresh();
-        return { ok: true, message: "Signed out of this browser." };
-      } catch (error) {
-        publish({ loading: false });
-        return fail(reason(error));
-      }
-    },
-    async requestPasswordReset(email: string): Promise<ActionResult> {
-      if (!client) return missingBackend();
-      try {
-        const result = await client.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: authRedirectUrl(true),
-        });
-        if (result.error) throw result.error;
-        publish({ error: null });
         return {
           ok: true,
-          message:
-            "If this address has an account, a recovery email will arrive. Open its link in this same browser.",
+          message: "Signed out. Your SciDA session has been revoked.",
         };
       } catch (error) {
-        return fail(reason(error));
-      }
-    },
-    async updatePassword(password: string): Promise<ActionResult> {
-      if (!client) return missingBackend();
-      if (!snapshot.user || !snapshot.recoveryMode)
+        publish({ loading: false });
         return fail(
-          "Open a valid recovery email link before choosing a new password.",
+          `Signed out of this tab, but server revocation could not be confirmed: ${reason(error)}`,
         );
-      try {
-        const result = await client.auth.updateUser({ password });
-        if (result.error) throw result.error;
-        clearRecoveryMarker();
-        publish({ recoveryMode: false, error: null });
-        return { ok: true, message: "Password updated." };
-      } catch (error) {
-        return fail(reason(error));
       }
     },
     saveProfile(input: ProfileInput): Promise<ActionResult> {
       const error = profileError(input);
       if (error) return Promise.resolve(fail(error));
       return mutate(
-        (user, repository) =>
-          repository.saveProfile(user.id, cleanProfile(input)),
-        "Profile saved to Supabase.",
+        (repository) => repository.saveProfile(cleanProfile(input)),
+        "Research profile saved.",
       );
     },
     applyForReview(topics: TopicId[], evidence: string): Promise<ActionResult> {
@@ -289,8 +232,7 @@ export function createPortalService(
           ),
         );
       return mutate(
-        (user, repository) =>
-          repository.applyForReview(user.id, topics, evidence.trim()),
+        (repository) => repository.applyForReview(topics, evidence.trim()),
         "Reviewer application submitted.",
       );
     },
@@ -313,12 +255,7 @@ export function createPortalService(
           fail("Keep the decision note under 2,000 characters."),
         );
       return mutate(
-        (_user, repository) =>
-          repository.reviewApplication(
-            id,
-            decision === "Approved",
-            note.trim(),
-          ),
+        (repository) => repository.reviewApplication(id, decision, note.trim()),
         "Reviewer application decision saved.",
       );
     },
@@ -328,26 +265,21 @@ export function createPortalService(
     ): Promise<ActionResult & { code?: string }> {
       if (!repo || !client) return missingBackend();
       const user = snapshot.user;
-      if (!user) return fail("Sign in with a verified account to continue.");
+      const token = client.getSession()?.token;
+      if (!user || !token) return fail("Sign in with GitHub to continue.");
       if (
         !validTopics(topics, true) ||
-        !topics.every((topic) => canManageTopic(snapshot.user, topic))
+        !topics.every((topic) => canManageTopic(user, topic))
       )
         return fail("Choose topics within your assigned approval scope.");
       if (
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
         email.length > 254
       )
-        return fail("Enter the intended researcher's email address.");
-      const request = revision;
+        return fail("Enter the intended researcher's verified email address.");
       try {
         const invitation = await repo.createInvitation(topics, email.trim());
-        if (request !== revision && snapshot.user?.id !== user.id)
-          return fail(
-            "The account changed after creating the invitation. Sign in and create a new invitation if needed.",
-          );
-        // Return the one-time code before any secondary reload can fail or unmount
-        // its form. The cache includes only confirmed server fields, never the code.
+        if (token !== client.getSession()?.token) return changedAccount();
         const { code, ...record } = invitation;
         if (!code)
           throw new Error(
@@ -366,7 +298,7 @@ export function createPortalService(
         return {
           ok: true,
           message:
-            "Invitation created. Share the code privately with its intended recipient.",
+            "Invitation created. Share its code privately with the intended recipient.",
           code,
         };
       } catch (error) {
@@ -377,16 +309,13 @@ export function createPortalService(
       code: string,
     ): Promise<ActionResult & { invitation?: Invitation }> {
       if (!repo || !client) return missingBackend();
-      if (!snapshot.user)
-        return fail(
-          "Sign in with your verified email address before entering an invitation.",
-        );
+      const token = client.getSession()?.token;
+      if (!snapshot.user || !token)
+        return fail("Sign in with GitHub before entering an invitation.");
       if (!bounded(code, 200)) return fail("Enter a valid invitation code.");
-      const request = revision;
       try {
         const invitation = await repo.previewInvitation(code.trim());
-        if (request !== revision)
-          return fail("Your account changed. Enter the invitation again.");
+        if (token !== client.getSession()?.token) return changedAccount();
         publish({ error: null });
         return {
           ok: true,
@@ -404,9 +333,8 @@ export function createPortalService(
           fail("Enter an invitation and confirm its exact topic scope."),
         );
       return mutate(
-        (_user, repository) =>
-          repository.confirmInvitation(code.trim(), topics),
-        "Invitation accepted. Approved review topics are now attached to your account.",
+        (repository) => repository.confirmInvitation(code.trim(), topics),
+        "Invitation accepted. The approved review topics are now attached to your account.",
       );
     },
     addComment(input: CommentInput): Promise<ActionResult> {
@@ -430,8 +358,8 @@ export function createPortalService(
           ),
         );
       return mutate(
-        (user, repository) =>
-          repository.addComment(user.id, {
+        (repository) =>
+          repository.addComment({
             ...input,
             body: input.body.trim(),
             reference: input.reference.trim(),
@@ -448,8 +376,7 @@ export function createPortalService(
           fail("Explain your request in 1–2,000 characters."),
         );
       return mutate(
-        (user, repository) =>
-          repository.requestCode(user.id, discoveryId, explanation.trim()),
+        (repository) => repository.requestCode(discoveryId, explanation.trim()),
         "Code request recorded for the site administrator.",
       );
     },
@@ -462,12 +389,10 @@ export function createPortalService(
         );
       if (!validDiscovery(discovery))
         return Promise.resolve(
-          fail(
-            "Complete the discovery fields and use valid HTTP or HTTPS material URLs.",
-          ),
+          fail("Complete all discovery fields before saving."),
         );
       return mutate(
-        (_user, repository) => repository.updateDiscovery(discovery),
+        (repository) => repository.updateDiscovery(discovery),
         "Discovery updated.",
       );
     },
@@ -486,19 +411,55 @@ export function createPortalService(
       if (role === "Admin")
         return Promise.resolve(
           fail(
-            "Administrator access can only be established through the controlled database procedure.",
+            "Administrator access is controlled by the server configuration.",
           ),
         );
       if (!validTopics(approved) || !validTopics(assigned))
         return Promise.resolve(fail("Choose recognized research topics."));
       return mutate(
-        (_user, repository) =>
-          repository.setAccess(userId, role, approved, assigned),
+        (repository) => repository.setAccess(userId, role, approved, assigned),
         "Account access updated.",
       );
     },
+    async downloadMaterial(
+      discoveryId: string,
+      kind: keyof Discovery["materials"],
+    ): Promise<ActionResult> {
+      if (!client || !repo) return missingBackend();
+      const token = client.getSession()?.token;
+      if (
+        !["paper", "appendix", "figures", "data", "repository"].includes(kind)
+      )
+        return fail("This supporting material is unavailable.");
+      try {
+        const material = await repo.downloadMaterial(discoveryId, kind);
+        if (token !== client.getSession()?.token) return changedAccount();
+        if (material.url)
+          (
+            dependencies.navigate ??
+            ((url: string) => window.location.assign(url))
+          )(material.url);
+        else if (material.blob)
+          (dependencies.saveDownload ?? saveDownload)(
+            material.blob,
+            material.filename ?? `${discoveryId}-${kind}`,
+          );
+        else
+          throw new Error(
+            "The material response did not contain a file or link.",
+          );
+        publish({ error: null });
+        return {
+          ok: true,
+          message: material.url
+            ? "Opening the supporting material."
+            : "Supporting material downloaded.",
+        };
+      } catch (error) {
+        return fail(reason(error));
+      }
+    },
   };
-
   return {
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) {
@@ -508,55 +469,59 @@ export function createPortalService(
       };
     },
     start(): Promise<void> {
-      if (!client) return Promise.resolve();
+      if (!client || !auth) return Promise.resolve();
       active = true;
-      subscription ??= client.auth.onAuthStateChange((event) => {
-        // Never await Supabase calls inside this callback: the auth lock may be held.
-        if (initializing || event === "INITIAL_SESSION") return;
+      unsubscribe ??= client.subscribeSession(() => {
         ++revision;
         publish({
           user: null,
-          state: clearPrivate(),
-          loading: true,
-          recoveryMode:
-            event === "PASSWORD_RECOVERY" ||
-            (event !== "SIGNED_OUT" && snapshot.recoveryMode),
+          state: emptyPortalState(),
+          loading: false,
+          error: client.getSession()
+            ? null
+            : "Your SciDA session ended. Sign in with GitHub to continue.",
         });
-        queueMicrotask(() => {
-          if (active) void refresh();
-        });
-      }).data.subscription;
-      if (initialization) return initialization;
+        scheduleExpiry();
+        if (!initializing && client.getSession())
+          queueMicrotask(() => {
+            if (active) void refresh();
+          });
+      });
+      if (!refreshTimer) {
+        refreshTimer = setInterval(refreshWhenVisible, 120_000);
+        window.addEventListener("focus", refreshWhenVisible);
+        document.addEventListener("visibilitychange", refreshWhenVisible);
+      }
+      if (initializing) return initializing;
       if (initialized) return refresh().then(() => undefined);
-      initializing = true;
-      initialization = (async () => {
+      initializing = (async () => {
         try {
-          const recoveryMode = await completeAuthCallback(client);
-          if (active) {
-            publish({ recoveryMode });
-            await refresh();
-          }
+          await auth.completeCallback();
+          if (active) await refresh();
         } catch (error) {
           if (active) {
-            publish({ state: emptyPortalState(), user: null, loading: false });
+            publish({ user: null, state: emptyPortalState(), loading: false });
             fail(reason(error));
           }
         } finally {
-          initializing = false;
           initialized = true;
-          initialization = null;
+          initializing = null;
         }
       })();
-      return initialization;
+      return initializing;
     },
     stop() {
       active = false;
-      subscription?.unsubscribe();
-      subscription = undefined;
       ++revision;
+      unsubscribe?.();
+      unsubscribe = undefined;
+      clearTimeout(expiryTimer);
+      clearInterval(refreshTimer);
+      refreshTimer = undefined;
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     },
     actions,
   };
 }
-
 export type PortalService = ReturnType<typeof createPortalService>;

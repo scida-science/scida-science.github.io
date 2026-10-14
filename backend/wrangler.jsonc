@@ -1,0 +1,19 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "scida-api",
+  "main": "index.ts",
+  "compatibility_date": "2026-10-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "vars": {
+    "FRONTEND_ORIGIN": "https://scida-science.github.io",
+    "API_ORIGIN": "https://scida-api.REPLACE_WORKERS_SUBDOMAIN.workers.dev",
+    "GITHUB_ORG": "scida-science",
+    "ADMIN_REPOSITORY": "scida-admin",
+    "ADMIN_GITHUB_ID": "89913681",
+    "GITHUB_APP_ID": "REPLACE_APP_ID",
+    "GITHUB_CLIENT_ID": "REPLACE_CLIENT_ID",
+    "GITHUB_INSTALLATION_ID": "REPLACE_INSTALLATION_ID",
+  },
+}

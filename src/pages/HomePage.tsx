@@ -71,7 +71,7 @@ export default function HomePage() {
         <div className="hero-note">
           <span className="hero-number">
             {String(state.discoveries.length).padStart(2, "0")}
-            <span> / illustrative discoveries</span>
+            <span> / discoveries</span>
           </span>
           <div className="hero-note-rule" />
           <span>Two fields. Many perspectives.</span>
@@ -194,18 +194,27 @@ export default function HomePage() {
                         {d.status === "Awaiting Validation"
                           ? "Review focus"
                           : d.status === "Published"
-                            ? "Illustrative publication record"
-                            : "Illustrative validation record"}
+                            ? d.illustrative
+                              ? "Illustrative publication record"
+                              : "Publication record"
+                            : d.illustrative
+                              ? "Illustrative validation record"
+                              : "Validation record"}
                       </strong>{" "}
                       {d.reviewNote.replace(
-                        /^(Review focus|Illustrative validation record|Illustrative publication record):\s*/i,
+                        /^(Review focus|(?:Illustrative )?validation record|(?:Illustrative )?publication record):\s*/i,
                         "",
                       )}
                     </p>
                   </div>
                   <div className="card-bottomline">
                     <span className="example-label">
-                      Illustrative example <span>·</span> {d.id}
+                      {d.illustrative && (
+                        <>
+                          Illustrative example <span>·</span>{" "}
+                        </>
+                      )}
+                      {d.id}
                     </span>
                     <span>
                       Updated {formatDate(d.updatedAt)} <ArrowRight size={15} />
@@ -287,10 +296,13 @@ export default function HomePage() {
                 </small>
               </p>
             </div>
-            <p className="sidebar-disclaimer">
-              All stages and validation records in these examples are
-              illustrative. No real publication or validation is implied.
-            </p>
+            {state.discoveries.some((discovery) => discovery.illustrative) && (
+              <p className="sidebar-disclaimer">
+                Entries marked “Illustrative example” demonstrate the research
+                interface. Their stages and validation records do not imply real
+                publication or validation.
+              </p>
+            )}
           </section>
           <section className="reviewer-callout">
             <span className="small-icon">

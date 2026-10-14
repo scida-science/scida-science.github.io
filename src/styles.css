@@ -2496,6 +2496,14 @@ code {
 .invitation-code {
   overflow-wrap: anywhere;
 }
+.material-download {
+  font-size: 11px;
+  margin-top: 5px;
+  text-align: left;
+}
+.account-callback {
+  margin-top: 40px;
+}
 input[readonly] {
   background: #f4f6f0;
   color: var(--muted);

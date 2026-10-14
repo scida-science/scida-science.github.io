@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Fixtures and simulated responses in this file are test-only; the application uses Supabase.
+// Fixtures and simulated responses in this file are test-only; the application uses the authenticated research API.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -56,12 +56,9 @@ beforeEach(() => {
     configured: true,
     loading: false,
     error: null,
-    recoveryMode: false,
-    signIn: success(),
-    signUp: success(),
+    signInWithGitHub: success(),
+    downloadMaterial: success(),
     signOut: success(),
-    requestPasswordReset: success(),
-    updatePassword: success(),
     refresh: success(),
     saveProfile: success(),
     applyForReview: success(),
@@ -97,6 +94,9 @@ describe("Public research and real account interface", () => {
     openApp();
     expect(
       within(screen.getByRole("tabpanel")).getAllByRole("article"),
+    ).toHaveLength(6);
+    expect(
+      within(screen.getByRole("tabpanel")).getAllByText(/Illustrative example/),
     ).toHaveLength(6);
     expect(
       screen.queryByRole("combobox", { name: /persona|role/i }),
@@ -168,12 +168,15 @@ describe("Public research and real account interface", () => {
     expect(screen.queryByLabelText("Email")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
-    expect(portal.signIn).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Sign in with GitHub" }),
+    ).toBeNull();
+    expect(portal.signInWithGitHub).not.toHaveBeenCalled();
   });
 
-  it("awaits real sign-in, disables duplicate submissions, and shows authentication failure", async () => {
+  it("starts GitHub sign-in without collecting credentials and disables duplicate requests", async () => {
     let resolve!: (result: ActionResult) => void;
-    portal.signIn = vi.fn(
+    portal.signInWithGitHub = vi.fn(
       () =>
         new Promise<ActionResult>((done) => {
           resolve = done;
@@ -181,99 +184,88 @@ describe("Public research and real account interface", () => {
     );
     const interaction = userEvent.setup();
     openApp("/login");
-    await interaction.type(
-      screen.getByLabelText("Email"),
-      "researcher@example.org",
+    expect(screen.queryByLabelText("Email")).toBeNull();
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    await interaction.click(
+      screen.getByRole("button", { name: "Sign in with GitHub" }),
     );
-    await interaction.type(
-      screen.getByLabelText("Password"),
-      "incorrect-password",
-    );
-    await interaction.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(portal.signIn).toHaveBeenCalledWith(
-      "researcher@example.org",
-      "incorrect-password",
-    );
+    expect(portal.signInWithGitHub).toHaveBeenCalledOnce();
     expect(
       (
         screen.getByRole("button", {
-          name: "Please wait…",
+          name: /Opening GitHub/,
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
     await act(async () =>
-      resolve({ ok: false, message: "Invalid login credentials." }),
+      resolve({
+        ok: false,
+        message: "GitHub sign-in is unavailable. Try again.",
+      }),
     );
     expect(screen.getByRole("alert").textContent).toBe(
-      "Invalid login credentials.",
+      "GitHub sign-in is unavailable. Try again.",
     );
     expect(screen.queryByRole("link", { name: "My profile" })).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Sign in with GitHub",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
   });
 
-  it("registers with email, password, and full name only, and explains email confirmation", async () => {
-    vi.mocked(portal.signUp).mockResolvedValue({
-      ok: true,
-      message: "Check your email to confirm your account.",
-    });
-    const interaction = userEvent.setup();
+  it("sends registration and recovery to GitHub instead of providing local password forms", () => {
     openApp("/login");
-    await interaction.click(
-      screen.getByRole("button", { name: "Create an account" }),
+    expect(
+      screen
+        .getByRole("link", { name: "Create a GitHub account" })
+        .getAttribute("href"),
+    ).toBe("https://github.com/signup");
+    expect(
+      screen
+        .getByRole("link", { name: "Recover your GitHub account" })
+        .getAttribute("href"),
+    ).toBe("https://github.com/password_reset");
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
+  });
+
+  it("keeps the GitHub callback pending until the API confirms the account", () => {
+    portal.loading = true;
+    const view = openApp("/auth/callback?code=opaque-code&state=opaque-state");
+    expect(
+      screen.getByRole("heading", { name: /Completing GitHub sign-in/ }),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("Full name")).toBeNull();
+    signedIn();
+    portal.loading = false;
+    view.rerender(
+      <MemoryRouter
+        initialEntries={["/auth/callback?code=opaque-code&state=opaque-state"]}
+      >
+        <App />
+      </MemoryRouter>,
     );
-    await interaction.type(
-      screen.getByLabelText("Full name"),
+    expect((screen.getByLabelText("Full name") as HTMLInputElement).value).toBe(
       "Test Researcher",
-    );
-    await interaction.type(
-      screen.getByLabelText("Email"),
-      "researcher@example.org",
-    );
-    await interaction.type(
-      screen.getByLabelText(/Password/),
-      "a-long-test-password",
-    );
-    expect(screen.queryByRole("combobox")).toBeNull();
-    await interaction.click(
-      screen.getByRole("button", { name: "Create account" }),
-    );
-    expect(portal.signUp).toHaveBeenCalledWith(
-      "researcher@example.org",
-      "a-long-test-password",
-      "Test Researcher",
-    );
-    expect(screen.getByRole("status").textContent).toMatch(
-      /confirm your account/,
     );
   });
 
-  it("requests a recovery email and routes verified recovery state to a new password form", async () => {
-    const interaction = userEvent.setup();
-    const view = openApp("/login");
-    await interaction.click(
-      screen.getByRole("button", { name: "Forgot password?" }),
-    );
-    await interaction.type(
-      screen.getByLabelText("Email"),
-      "researcher@example.org",
-    );
-    await interaction.click(
-      screen.getByRole("button", { name: "Send recovery email" }),
-    );
-    expect(portal.requestPasswordReset).toHaveBeenCalledWith(
-      "researcher@example.org",
-    );
-    view.unmount();
-    portal.recoveryMode = true;
-    signedIn();
-    openApp("/");
-    await interaction.type(
-      screen.getByLabelText(/New password/),
-      "another-test-password",
-    );
-    await interaction.click(
-      screen.getByRole("button", { name: "Update password" }),
-    );
-    expect(portal.updatePassword).toHaveBeenCalledWith("another-test-password");
+  it("shows callback failure without creating an account or exposing callback tokens", () => {
+    portal.error = "GitHub authorization expired. Please sign in again.";
+    openApp("/auth/callback?code=opaque-code&state=opaque-state");
+    expect(
+      screen.getByRole("heading", { name: "Sign-in could not be completed" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Return to sign in" }),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("Full name")).toBeNull();
+    expect(document.body.textContent).not.toContain("opaque-code");
+    expect(document.body.textContent).not.toContain("opaque-state");
   });
 
   it("limits profile expertise to selected fields, clears removed topics, and keeps email readonly", async () => {
@@ -635,6 +627,149 @@ describe("Public research and real account interface", () => {
     );
   });
 
+  it("offers a manual refresh and prevents overlapping refresh requests", async () => {
+    const interaction = userEvent.setup();
+    const view = openApp();
+    await interaction.click(
+      screen.getByRole("button", { name: "Refresh research portal" }),
+    );
+    expect(portal.refresh).toHaveBeenCalledOnce();
+    portal.loading = true;
+    view.rerender(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Refresh research portal",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it("opens supporting material through the API and shows authorization failure without exposing its location", async () => {
+    signedIn();
+    portal.state.discoveries.find(
+      (discovery) => discovery.id === "AI-001",
+    )!.materials.paper = "private-location-marker";
+    let resolve!: (result: ActionResult) => void;
+    portal.downloadMaterial = vi.fn(
+      () =>
+        new Promise<ActionResult>((done) => {
+          resolve = done;
+        }),
+    );
+    const interaction = userEvent.setup();
+    openApp("/discoveries/AI-001");
+    await interaction.click(
+      screen.getByRole("button", { name: "Open full paper" }),
+    );
+    expect(portal.downloadMaterial).toHaveBeenCalledWith("AI-001", "paper");
+    expect(
+      (screen.getByRole("button", { name: /Opening/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(document.body.innerHTML).not.toContain("private-location-marker");
+    await act(async () =>
+      resolve({
+        ok: false,
+        message: "This material requires approved review access.",
+      }),
+    );
+    expect(screen.getByRole("alert").textContent).toBe(
+      "This material requires approved review access.",
+    );
+  });
+
+  it("distinguishes restricted materials from missing uploads and links to the appropriate access flow", () => {
+    portal.state.discoveries.find(
+      (discovery) => discovery.id === "AI-001",
+    )!.restrictedMaterials = ["paper"];
+    const view = openApp("/discoveries/AI-001");
+    expect(screen.getByText("Restricted material")).toBeTruthy();
+    expect(screen.getAllByText("Not uploaded yet")).toHaveLength(4);
+    expect(
+      screen
+        .getByRole("link", { name: "Sign in to access full paper" })
+        .getAttribute("href"),
+    ).toBe("/login");
+    view.unmount();
+    signedIn();
+    openApp("/discoveries/AI-001");
+    expect(
+      screen
+        .getByRole("link", { name: "Request access to full paper" })
+        .getAttribute("href"),
+    ).toBe("/access");
+  });
+
+  it("lets anonymous readers open a material the server has made public", async () => {
+    portal.state.discoveries.find(
+      (discovery) => discovery.id === "AI-001",
+    )!.materials.paper = "public-material-availability-marker";
+    vi.mocked(portal.downloadMaterial).mockResolvedValue({
+      ok: true,
+      message: "Supporting material downloaded.",
+    });
+    const interaction = userEvent.setup();
+    openApp("/discoveries/AI-001");
+    expect(portal.user).toBeNull();
+    await interaction.click(
+      screen.getByRole("button", { name: "Open full paper" }),
+    );
+    expect(portal.downloadMaterial).toHaveBeenCalledWith("AI-001", "paper");
+    expect(screen.getByRole("status").textContent).toBe(
+      "Supporting material downloaded.",
+    );
+    expect(portal.signInWithGitHub).not.toHaveBeenCalled();
+    expect(document.body.innerHTML).not.toContain(
+      "public-material-availability-marker",
+    );
+  });
+
+  it("labels examples explicitly without describing real discoveries as fictional", () => {
+    const discovery = portal.state.discoveries.find(
+      (item) => item.id === "AI-003",
+    )!;
+    discovery.illustrative = false;
+    discovery.reviewNote =
+      "Publication record: supporting evidence is available for inspection.";
+    const view = openApp();
+    const card = screen
+      .getByRole("link", { name: new RegExp(discovery.title) })
+      .closest("article")!;
+    expect(within(card).queryByText("Illustrative example")).toBeNull();
+    expect(within(card).getByText("Publication record")).toBeTruthy();
+    view.unmount();
+    openApp("/discoveries/AI-003");
+    expect(screen.queryByText("Illustrative example")).toBeNull();
+    expect(
+      screen.queryByText("This is a fictional research example."),
+    ).toBeNull();
+    expect(screen.getByText("Review record")).toBeTruthy();
+  });
+
+  it("keeps supporting-material configuration readonly in the administrator brief editor", async () => {
+    signedIn({ ...researcher, role: "Admin" });
+    portal.state.discoveries.find(
+      (discovery) => discovery.id === "AI-001",
+    )!.materials.paper = "private-location-marker";
+    const interaction = userEvent.setup();
+    openApp("/discoveries/AI-001");
+    await interaction.click(
+      screen.getByRole("button", { name: "Edit discovery" }),
+    );
+    const paper = screen.getByRole("textbox", {
+      name: "Full paper",
+    }) as HTMLInputElement;
+    expect(paper.readOnly).toBe(true);
+    expect(paper.value).toBe("Available");
+    expect(document.body.innerHTML).not.toContain("private-location-marker");
+    expect(screen.getByText("discovery.json")).toBeTruthy();
+  });
+
   it("awaits logout and exposes server failure without offering role switching", async () => {
     signedIn();
     vi.mocked(portal.signOut).mockResolvedValue({
@@ -651,5 +786,57 @@ describe("Public research and real account interface", () => {
     expect(
       screen.queryByRole("combobox", { name: /persona|role/i }),
     ).toBeNull();
+  });
+
+  it("preserves the original manuscript timestamp and revision through editing and a concurrent refresh", async () => {
+    signedIn({ ...researcher, role: "Admin" });
+    const discovery = portal.state.discoveries.find(
+      (item) => item.id === "AI-001",
+    )!;
+    const originalUpdatedAt = discovery.updatedAt;
+    Object.assign(discovery, { revision: "original-blob-sha" });
+    vi.mocked(portal.updateDiscovery).mockResolvedValue({
+      ok: false,
+      message: "The discovery changed on GitHub. Refresh before editing again.",
+    });
+    const interaction = userEvent.setup();
+    const view = openApp("/discoveries/AI-001");
+    await interaction.click(
+      screen.getByRole("button", { name: "Edit discovery" }),
+    );
+    const title = screen.getByRole("textbox", { name: "Title" });
+    await interaction.clear(title);
+    await interaction.type(title, "Revised research brief");
+    portal.state.discoveries = portal.state.discoveries.map((item) =>
+      item.id === "AI-001"
+        ? {
+            ...item,
+            updatedAt: "2026-10-15T12:00:00Z",
+            revision: "newer-blob-sha",
+          }
+        : item,
+    );
+    view.rerender(
+      <MemoryRouter initialEntries={["/discoveries/AI-001"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    await interaction.click(
+      screen.getByRole("button", { name: "Save discovery" }),
+    );
+    expect(portal.updateDiscovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Revised research brief",
+        updatedAt: originalUpdatedAt,
+        revision: "original-blob-sha",
+      }),
+    );
+    expect(screen.getByRole("status").textContent).toBe(
+      "The discovery changed on GitHub. Refresh before editing again.",
+    );
+    expect(
+      (screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement)
+        .value,
+    ).toBe("Revised research brief");
   });
 });

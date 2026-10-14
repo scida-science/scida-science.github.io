@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { getBackend } from "../lib/supabase";
+import { getBackend } from "../lib/api";
 import {
   createPortalService,
   type PortalService,

@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import katex from "katex";
 import {
   ArrowLeft,
-  ArrowUpRight,
+  Download,
   BookOpen,
   Code2,
   Database,
@@ -18,7 +18,7 @@ import { topics } from "../data/discoveries";
 import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
-import type { Discovery } from "../types";
+import type { ActionResult, Discovery } from "../types";
 
 const materialNames: Array<{
   key: keyof Discovery["materials"];
@@ -32,11 +32,18 @@ const materialNames: Array<{
   { key: "repository", label: "GitHub repository", icon: Code2 },
 ];
 function Materials({ discovery }: { discovery: Discovery }) {
-  const { state, user, requestCode, configured, error } = usePortal();
+  const { state, user, requestCode, downloadMaterial, configured, error } =
+    usePortal();
   const [open, setOpen] = useState(false);
   const [explanation, setExplanation] = useState("");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [downloading, setDownloading] = useState<
+    keyof Discovery["materials"] | null
+  >(null);
+  const [downloadResult, setDownloadResult] = useState<ActionResult | null>(
+    null,
+  );
   const requests = state.codeRequests.filter(
     (r) => r.discoveryId === discovery.id && r.userId === user?.id,
   );
@@ -51,19 +58,67 @@ function Materials({ discovery }: { discovery: Discovery }) {
             <div>
               <strong>{label}</strong>
               {discovery.materials[key] ? (
-                <a
-                  href={discovery.materials[key]!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open resource <ArrowUpRight size={13} />
-                </a>
+                configured ? (
+                  <button
+                    type="button"
+                    className="text-button material-download"
+                    disabled={downloading !== null}
+                    onClick={async () => {
+                      setDownloading(key);
+                      setDownloadResult(null);
+                      try {
+                        setDownloadResult(
+                          await downloadMaterial(discovery.id, key),
+                        );
+                      } catch {
+                        setDownloadResult({
+                          ok: false,
+                          message:
+                            "The material could not be downloaded. Please try again.",
+                        });
+                      } finally {
+                        setDownloading(null);
+                      }
+                    }}
+                  >
+                    <Download size={13} />
+                    {downloading === key
+                      ? "Opening…"
+                      : key === "repository"
+                        ? "Open GitHub repository"
+                        : `Open ${label.toLowerCase()}`}
+                  </button>
+                ) : (
+                  <span>
+                    Materials unavailable until account services are connected
+                  </span>
+                )
+              ) : discovery.restrictedMaterials?.includes(key) ? (
+                <>
+                  <span>Restricted material</span>
+                  <Link
+                    to={user ? "/access" : "/login"}
+                    aria-label={`${user ? "Request access to" : "Sign in to access"} ${label.toLowerCase()}`}
+                  >
+                    {user
+                      ? "Request topic-specific access"
+                      : "Sign in to inspect access"}
+                  </Link>
+                </>
               ) : (
                 <span>Not uploaded yet</span>
               )}
             </div>
           </div>
         ))}
+        {downloadResult && (
+          <p
+            role={downloadResult.ok ? "status" : "alert"}
+            className={`notice ${downloadResult.ok ? "notice-success" : "notice-error"}`}
+          >
+            {downloadResult.message}
+          </p>
+        )}
         {user && configured ? (
           <button
             className="btn btn-secondary request-code-button"
@@ -142,10 +197,12 @@ function Materials({ discovery }: { discovery: Discovery }) {
           </details>
         )}
       </section>
-      <div className="sidebar-disclaimer">
-        All materials are placeholders until explicitly added. SciDA does not
-        imply a real paper, DOI, dataset, or publication for these examples.
-      </div>
+      {discovery.illustrative && (
+        <div className="sidebar-disclaimer">
+          All materials are placeholders until explicitly added. SciDA does not
+          imply a real paper, DOI, dataset, or publication for these examples.
+        </div>
+      )}
     </>
   );
 }
@@ -236,7 +293,9 @@ export default function DiscoveryPage() {
         <h1>{discovery.title}</h1>
         <p className="discovery-lead">{discovery.summary}</p>
         <div className="discovery-meta">
-          <span className="example-label">Illustrative example</span>
+          {discovery.illustrative && (
+            <span className="example-label">Illustrative example</span>
+          )}
           <span>Manuscript {discovery.version}</span>
           <span>Updated {formatDate(discovery.updatedAt)}</span>
           {user?.role === "Admin" && (
@@ -251,11 +310,13 @@ export default function DiscoveryPage() {
           )}
         </div>
       </header>
-      <div className="notice research-notice">
-        <strong>This is a fictional research example.</strong> All claims,
-        validation records, and publication stages demonstrate the interface. No
-        real scientific result is reported.
-      </div>
+      {discovery.illustrative && (
+        <div className="notice research-notice">
+          <strong>This is a fictional research example.</strong> All claims,
+          validation records, and publication stages demonstrate the interface.
+          No real scientific result is reported.
+        </div>
+      )}
       {editing && (
         <DiscoveryEditor
           key={discovery.id}
@@ -276,7 +337,9 @@ export default function DiscoveryPage() {
             <span className="eyebrow">
               {discovery.status === "Awaiting Validation"
                 ? "Open for examination"
-                : "Illustrative review record"}
+                : discovery.illustrative
+                  ? "Illustrative review record"
+                  : "Review record"}
             </span>
             <p>{discovery.reviewNote}</p>
           </div>

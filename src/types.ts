@@ -20,6 +20,9 @@ export interface Section {
   equation?: string;
 }
 export interface Discovery {
+  /** API-only source revision, used to prevent overwriting newer GitHub edits. */
+  revision?: string;
+  restrictedMaterials?: Array<keyof Discovery["materials"]>;
   illustrative?: boolean;
   id: string;
   title: string;

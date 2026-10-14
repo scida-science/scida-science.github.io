@@ -29,6 +29,7 @@ export const topics: Topic[] = [
 // they do not report real validation, publication, or scientific discoveries.
 export const discoveries: Discovery[] = [
   {
+    illustrative: true,
     id: "AI-001",
     title: "Adaptive exploration under delayed feedback",
     field: "Artificial Intelligence",
@@ -82,6 +83,7 @@ export const discoveries: Discovery[] = [
     },
   },
   {
+    illustrative: true,
     id: "AST-001",
     title: "Separating transient signals from survey cadence",
     field: "Astronomy",
@@ -134,6 +136,7 @@ export const discoveries: Discovery[] = [
     },
   },
   {
+    illustrative: true,
     id: "AI-002",
     title: "Calibrating uncertainty when observations are sparse",
     field: "Artificial Intelligence",
@@ -188,6 +191,7 @@ export const discoveries: Discovery[] = [
     },
   },
   {
+    illustrative: true,
     id: "AST-002",
     title: "Testing the stability of transit-timing residuals",
     field: "Astronomy",
@@ -240,6 +244,7 @@ export const discoveries: Discovery[] = [
     },
   },
   {
+    illustrative: true,
     id: "AI-003",
     title: "Tracing scientific claims to executable evidence",
     field: "Artificial Intelligence",
@@ -292,6 +297,7 @@ export const discoveries: Discovery[] = [
     },
   },
   {
+    illustrative: true,
     id: "AST-003",
     title: "Reassessing color gradients in faint galaxies",
     field: "Astronomy",

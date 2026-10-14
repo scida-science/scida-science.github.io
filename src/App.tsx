@@ -7,14 +7,14 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { ArrowRight, LogOut } from "lucide-react";
+import { ArrowRight, LogOut, RefreshCw } from "lucide-react";
 import { usePortal } from "./state/PortalContext";
 import { Brand } from "./components/Ui";
 import HomePage from "./pages/HomePage";
 import DiscoveryPage from "./pages/DiscoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import AccessPage from "./pages/AccessPage";
-import AuthPage from "./pages/AuthPage";
+import AuthPage, { AuthCallbackPage } from "./pages/AuthPage";
 
 function RouteFocus() {
   const { pathname } = useLocation();
@@ -27,8 +27,7 @@ function RouteFocus() {
 }
 
 export default function App() {
-  const { user, signOut, configured, loading, error, recoveryMode, refresh } =
-    usePortal();
+  const { user, signOut, configured, loading, error, refresh } = usePortal();
   const [signingOut, setSigningOut] = useState(false);
   const [accountError, setAccountError] = useState("");
   return (
@@ -56,6 +55,17 @@ export default function App() {
             <NavLink to="/access">Reviewer access</NavLink>
           </nav>
           <div className="account-controls">
+            {configured && (
+              <button
+                className="icon-button"
+                aria-label="Refresh research portal"
+                title="Refresh research portal"
+                disabled={loading}
+                onClick={() => void refresh()}
+              >
+                <RefreshCw size={17} />
+              </button>
+            )}
             {user ? (
               <>
                 <Link className="account-name" to="/profile">
@@ -88,15 +98,19 @@ export default function App() {
       {!configured && (
         <div className="notice configuration-notice" role="status">
           <strong>Account services are not configured yet.</strong> You can
-          explore the six illustrative discoveries. Registration, discussions,
-          and requests become available after the research portal is connected.
+          explore the six illustrative discoveries. Sign-in, discussions, and
+          requests become available after the research portal is connected.
         </div>
       )}
       {(error || accountError) && (
         <div className="notice notice-error storage-notice" role="alert">
           {error || accountError}{" "}
           {error && (
-            <button className="text-button" onClick={() => void refresh()}>
+            <button
+              className="text-button"
+              disabled={loading}
+              onClick={() => void refresh()}
+            >
               Try again
             </button>
           )}
@@ -109,49 +123,46 @@ export default function App() {
       )}
       <main id="main-content" className="main-container" tabIndex={-1}>
         <RouteFocus />
-        {recoveryMode ? (
-          <AuthPage recovery />
-        ) : (
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route
-              path="/discoveries/:id"
-              element={<DiscoveryPage key={user?.id ?? "visitor"} />}
-            />
-            <Route
-              path="/profile"
-              element={
-                loading && !user ? null : (
-                  <ProfilePage key={user?.id ?? "visitor"} />
-                )
-              }
-            />
-            <Route
-              path="/access"
-              element={
-                loading && !user ? null : (
-                  <AccessPage key={user?.id ?? "visitor"} />
-                )
-              }
-            />
-            <Route
-              path="/login"
-              element={user ? <Navigate replace to="/profile" /> : <AuthPage />}
-            />
-            <Route
-              path="*"
-              element={
-                <div className="empty-state">
-                  <h1>Page not found</h1>
-                  <p>This page could not be found.</p>
-                  <Link className="btn btn-primary" to="/">
-                    Return to discoveries
-                  </Link>
-                </div>
-              }
-            />
-          </Routes>
-        )}
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route
+            path="/discoveries/:id"
+            element={<DiscoveryPage key={user?.id ?? "visitor"} />}
+          />
+          <Route
+            path="/profile"
+            element={
+              loading && !user ? null : (
+                <ProfilePage key={user?.id ?? "visitor"} />
+              )
+            }
+          />
+          <Route
+            path="/access"
+            element={
+              loading && !user ? null : (
+                <AccessPage key={user?.id ?? "visitor"} />
+              )
+            }
+          />
+          <Route
+            path="/login"
+            element={user ? <Navigate replace to="/profile" /> : <AuthPage />}
+          />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route
+            path="*"
+            element={
+              <div className="empty-state">
+                <h1>Page not found</h1>
+                <p>This page could not be found.</p>
+                <Link className="btn btn-primary" to="/">
+                  Return to discoveries
+                </Link>
+              </div>
+            }
+          />
+        </Routes>
       </main>
       <footer className="site-footer">
         <span>

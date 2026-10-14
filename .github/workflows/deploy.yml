@@ -29,15 +29,16 @@ jobs:
         run: npm ci
       - name: Run frontend and service tests
         run: npm test
-      - name: Test PostgreSQL policies
-        run: npm run test:db
+      - name: Check backend types
+        run: npm run check:backend
+      - name: Package Worker without deploying
+        run: npm run build:backend
       - name: Build website
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SCIDA_API_URL: ${{ vars.VITE_SCIDA_API_URL }}
         run: |
-          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "::warning::Supabase is not configured. This deployment will support public placeholder browsing only; account services will be unavailable."
+          if [ -z "$VITE_SCIDA_API_URL" ]; then
+            echo "::warning::The GitHub backend is not configured. Public illustrative discoveries remain available; account services are unavailable."
           fi
           npm run build
       - name: Configure Pages
