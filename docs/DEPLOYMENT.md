@@ -1,10 +1,10 @@
 # Deploy the SciDA GitHub backend
 
-The frontend stays at **https://scida-science.github.io/**. A Cloudflare Worker is the recommended serverless API because this project already includes its configuration and can keep GitHub credentials off the website. All application data remains in private GitHub files and Issues; no external database, KV, D1, or other storage binding is required. Review the current [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and [limits](https://developers.cloudflare.com/workers/platform/limits/) for your account rather than assuming the free plan will fit every workload.
+The frontend stays at **https://scida-science.github.io/**. The deployed API origin is **https://scida-api.scida-website.workers.dev**. A Cloudflare Worker keeps GitHub credentials off the website. All application data remains in private GitHub files and Issues; no external database, KV, D1, or other storage binding is required.
 
-The Free plan can be tried for initial validation, but its 10 ms CPU allowance per invocation can constrain this Worker's cryptography and JSON processing. As checked on 14 October 2026, Workers Paid starts at $5 per month; validate the workload and current charges before choosing a production plan. [Cloudflare pricing](https://developers.cloudflare.com/workers/platform/pricing/), [CPU limits](https://developers.cloudflare.com/workers/platform/limits/).
+**Use Workers Free only, with $0 recurring costs. Do not enable a paid plan or chargeable overages.** Workers Free allows 100,000 requests per day and 10 ms of CPU time per invocation; time spent waiting for network responses is separate from CPU time. Real authentication, GitHub reads/writes, and cryptographic operations still need testing on the deployed Worker. If limits cause failures, record the failing route and runtime outcome, measure where available, and optimize before considering another hosting option. [Cloudflare pricing](https://developers.cloudflare.com/workers/platform/pricing/), [CPU limits](https://developers.cloudflare.com/workers/platform/limits/).
 
-The website source and seven private repositories have been provisioned. The backend has not yet been deployed or connected to a GitHub App, and live OAuth/shared writes have not been tested. Complete the following steps using the organization owner's GitHub account and your Cloudflare account.
+The website source and seven private repositories have been provisioned, and the Worker shell has been deployed. GitHub App registration, installation, and credentials are pending. A successful deployment does not establish that real OAuth or shared writes work. The Cloudflare subscription API returned `403`, so the account's billing plan has not been independently verified; `default_usage_model: standard` is not proof of Workers Free. Confirm **Workers Free** in the Cloudflare dashboard without changing the plan. Complete the following steps using the organization owner's GitHub account and your Cloudflare account.
 
 ## 1. Confirm private storage and organization access
 
@@ -33,9 +33,9 @@ Set-Location (Join-Path ([Environment]::GetFolderPath('Desktop')) 'SciDA-website
 
 This script is provisioning, not synchronization: it does not overwrite existing briefs or reset existing administrative data.
 
-## 2. Create the Worker endpoint
+## 2. Confirm the deployed Worker endpoint
 
-Install dependencies, sign in to Cloudflare, and deploy the included Worker shell:
+The Worker has already been deployed at **https://scida-api.scida-website.workers.dev**. These are the Windows commands for subsequent checks and deployments:
 
 ```powershell
 npm.cmd ci
@@ -45,18 +45,23 @@ npm.cmd run build:backend
 npm.cmd run deploy:backend
 ```
 
-Wrangler prompts for your Cloudflare account when needed. Record the actual `https://scida-api.<your-subdomain>.workers.dev` address it prints. This first deployment can run with placeholders; `/health` reports `configured: false`, and account/data endpoints return an explicit `503`. No fake authentication is enabled.
+Wrangler prompts for your Cloudflare account when needed. The initial deployment contains unconfigured GitHub App identifiers. Its expected behavior is for `/health` to report `configured: false` and account/data endpoints to return an explicit `503`; verify the live response rather than treating deployment success as a health check. No fake authentication is enabled.
 
-In [backend/wrangler.jsonc](../backend/wrangler.jsonc), set `API_ORIGIN` to that exact origin, with **no trailing slash**. Keep `FRONTEND_ORIGIN` exactly `https://scida-science.github.io`, also without a trailing slash. The worker name is `scida-api`; no custom domain is required. [Wrangler deployment commands](https://developers.cloudflare.com/workers/wrangler/commands/workers/).
+In [backend/wrangler.jsonc](../backend/wrangler.jsonc), keep `API_ORIGIN` exactly `https://scida-api.scida-website.workers.dev`, with **no trailing slash**. Keep `FRONTEND_ORIGIN` exactly `https://scida-science.github.io`, also without a trailing slash. The worker name is `scida-api`; no custom domain is required. [Wrangler deployment commands](https://developers.cloudflare.com/workers/wrangler/commands/workers/).
 
 ## 3. Register the organization's GitHub App
 
-Open [scida-science's GitHub App settings](https://github.com/organizations/scida-science/settings/apps) and register a **GitHub App** owned by `scida-science`.
+Open [Register a new GitHub App in scida-science](https://github.com/organizations/scida-science/settings/apps/new) and register a **GitHub App** owned by `scida-science`.
 
 Configure:
 
+- Suggested App name: `SciDA Research Portal` (GitHub requires a globally unique name).
+- Description: `Scientific Discovery Agent research portal`.
 - Homepage URL: `https://scida-science.github.io/`.
-- Callback URL: your exact `API_ORIGIN` followed by `/auth/callback`.
+- Callback URL: **`https://scida-api.scida-website.workers.dev/auth/callback`**.
+- Callback wildcard matching: **disabled**; the callback must match exactly. [Callback URL settings](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url).
+- Request user authorization (OAuth) during installation: **unchecked**. Users must begin sign-in through SciDA so the required sign-in cookie and state exist.
+- Setup URL: leave blank. Redirect on update: unchecked.
 - Webhooks: disable **Active**; this implementation does not use webhooks.
 - Device flow: disabled.
 - Expiring user authorization tokens: enabled. SciDA discards the user token after reading identity and verified email.
@@ -74,18 +79,26 @@ Set only these permissions:
 
 Account email permission is needed to verify the researcher's primary email through GitHub's `/user/emails` endpoint. Repository permissions are exercised by the organization's installation token, not by the researcher's token. [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app), [permission selection](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app), and [email API requirements](https://docs.github.com/en/rest/users/emails#list-email-addresses-for-the-authenticated-user).
 
-Record the App ID and Client ID, generate a client secret, and generate/download a private key. Keep the secret and PEM file outside this public repository. The Worker accepts GitHub's downloaded PKCS#1 PEM and PKCS#8 PEM, including multiline values.
+Record the public App ID and Client ID, generate a client secret, and generate/download a private key. Enter the client secret only in the local Wrangler prompt described below; do not paste it into a conversation. Keep the downloaded PEM file outside this public repository and provide only its local file path when arranging the upload. The Worker accepts GitHub's downloaded PKCS#1 PEM and PKCS#8 PEM, including multiline values.
 
 Install the App in **scida-science** with **Only select repositories**, selecting exactly `scida-admin` and the six private discovery repositories listed above. Do not select the public `scida-science.github.io` source repository. Record the numeric installation ID from the installation's settings URL. Researchers authorize sign-in; they do not need to install the App themselves or join the organization.
 
 ## 4. Set identifiers and Worker secrets
+
+After registration and installation, the local helper can verify the App and fill in all three public identifiers automatically. Supply the public App URL and the downloaded PEM's absolute path; keep the PEM outside this project:
+
+```powershell
+node scripts/configure-github-app.mjs 'https://github.com/apps/YOUR-APP-SLUG' 'C:\Users\sarve\Downloads\YOUR-APP.private-key.pem'
+```
+
+It verifies organization ownership, the matching private key, App permissions, and the selected private repository scope. It then uploads the key directly through Wrangler's standard input. It does not display or copy the key into the project, and it revokes the temporary repository-verification token. The helper still needs testing with the actual registered App; syntax and local path safeguards have been checked. Run the client-secret prompt below separately, then deploy the completed Worker.
 
 Fill in the public identifiers in `backend/wrangler.jsonc`:
 
 | Variable                 | Value                                                        |
 | ------------------------ | ------------------------------------------------------------ |
 | `FRONTEND_ORIGIN`        | `https://scida-science.github.io`                            |
-| `API_ORIGIN`             | Actual deployed Worker origin, without a trailing slash      |
+| `API_ORIGIN`             | `https://scida-api.scida-website.workers.dev`                  |
 | `GITHUB_ORG`             | `scida-science`                                              |
 | `ADMIN_REPOSITORY`       | `scida-admin`                                                |
 | `ADMIN_GITHUB_ID`        | `89913681` — verified GitHub numeric ID for `SarveshVGharat` |
@@ -95,12 +108,10 @@ Fill in the public identifiers in `backend/wrangler.jsonc`:
 
 The owner ID is the entire admin bootstrap mechanism: after GitHub verifies that identity, the server recognizes it as Admin. Every other new account starts as Reader. A username, email, profile field, session-storage value, or public API request cannot assign Admin. Replacing the owner requires a deliberate Worker configuration change by the deployment owner.
 
-Store the following four values as **Worker secrets**, never in `vars`, `.env.local`, a `VITE_` variable, a GitHub Issue, or Git history. Use interactive prompts for single-line values:
+Store the four values below as **Worker secrets**, never in `vars`, `.env.local`, a `VITE_` variable, a GitHub Issue, or Git history. For the GitHub client secret, open a local PowerShell window in the project and run this command. Paste the value only into Wrangler's masked prompt, not into the command itself or a conversation:
 
 ```powershell
 npx.cmd wrangler secret put GITHUB_CLIENT_SECRET --config backend/wrangler.jsonc
-npx.cmd wrangler secret put SESSION_SECRET --config backend/wrangler.jsonc
-npx.cmd wrangler secret put DISCUSSION_SECRET --config backend/wrangler.jsonc
 ```
 
 For `GITHUB_PRIVATE_KEY`, pipe the downloaded file directly. Replace the example file path with its actual secure location:
@@ -109,32 +120,53 @@ For `GITHUB_PRIVATE_KEY`, pipe the downloaded file directly. Replace the example
 Get-Content -LiteralPath 'C:\secure\scida-app.private-key.pem' -Raw | npx.cmd wrangler secret put GITHUB_PRIVATE_KEY --config backend/wrangler.jsonc
 ```
 
-Generate **two independent, cryptographically random values of at least 32 characters** for `SESSION_SECRET` and `DISCUSSION_SECRET`, and retain encrypted backups in your password manager. The first protects the OAuth attempt cookie. The second signs discussion records so forged or edited GitHub entries cannot impersonate reviewers. Keep `DISCUSSION_SECRET` stable: changing it without a deliberate re-signing migration makes historical discussion signatures unverifiable. Rotating `SESSION_SECRET` invalidates pending OAuth cookies; revoking existing SciDA sessions requires removing their hashed records or using logout.
+The deployment setup generates **two independent, cryptographically random values of at least 32 characters** locally for `SESSION_SECRET` and `DISCUSSION_SECRET`, uploads them through Wrangler's standard input without displaying them, and retains an encrypted Windows DPAPI backup outside the repository. DPAPI recovery depends on the same Windows user credentials; preserve a separate encrypted recovery copy in your password manager if migrating computers. These generated values must not be sent in a conversation.
+
+Both signing secrets have been uploaded. Their encrypted backups are in `%LOCALAPPDATA%\SciDA\worker-secrets`. The repeatable setup command below preserves existing Worker secrets and reuses an existing encrypted backup if an upload must be retried:
+
+```powershell
+& .\scripts\initialize-worker-secrets.ps1
+```
+
+`SESSION_SECRET` protects the OAuth attempt cookie. `DISCUSSION_SECRET` signs discussion records so forged or edited GitHub entries cannot impersonate reviewers. Keep the discussion secret stable: changing it without a deliberate re-signing migration makes historical discussion signatures unverifiable. Rotating the session secret invalidates pending OAuth cookies; revoking existing SciDA sessions requires removing their hashed records or using logout. Do not regenerate an existing discussion secret when repeating setup.
 
 Wrangler's `secret put` deploys a new Worker version; after setting all values, deploy once more to apply the completed configuration. [Cloudflare secret storage and deployment behavior](https://developers.cloudflare.com/workers/configuration/secrets/).
 
 ```powershell
 npm.cmd run deploy:backend
-Invoke-RestMethod 'https://scida-api.YOUR-SUBDOMAIN.workers.dev/health'
+Invoke-RestMethod 'https://scida-api.scida-website.workers.dev/health'
 ```
 
-Use your actual address in the health command. It should return `configured: true`. This checks configuration presence, not GitHub connectivity or working OAuth. Keep the subsequent live checks mandatory.
+After identifiers and all four secrets are configured, the health command should return `configured: true`. This checks configuration presence, not GitHub connectivity or working OAuth. Keep the subsequent live checks mandatory.
 
 ## 5. Connect GitHub Pages
 
 In the public [website repository](https://github.com/scida-science/scida-science.github.io), open Settings → Secrets and variables → Actions → **Variables**. Add:
 
 ```text
-VITE_SCIDA_API_URL=https://scida-api.YOUR-SUBDOMAIN.workers.dev
+VITE_SCIDA_API_URL=https://scida-api.scida-website.workers.dev
 ```
 
 This URL is public. Add no credential variables: Vite bundles public configuration into the downloaded JavaScript, and this project's build rejects additional `VITE_` names.
 
 Ensure Settings → Pages → Source is **GitHub Actions**. Run the **Build and deploy SciDA** workflow from `main` or push the reviewed changes. It runs tests, checks and dry-runs Worker packaging, then builds/deploys the frontend. The workflow does not deploy the Worker and contains no Cloudflare or GitHub App secrets.
 
+When `VITE_SCIDA_API_URL` is set, the workflow also runs the read-only live API check before publishing. Missing App configuration or a failed GitHub data read blocks deployment and preserves the current Pages version. Finish Worker setup, run `node scripts/verify-live.mjs --require-configured`, then rerun the workflow to activate the API-connected frontend.
+
 The organization homepage uses Vite base `/` and `HashRouter`. Refreshing `https://scida-science.github.io/#/discoveries/AI-001` keeps the same page. The OAuth return uses `/#/auth/callback?code=…&state=…`; the verifier/state must be present in the same browser tab that started sign-in. There are no SciDA passwords or recovery links: GitHub manages those account functions.
 
 ## Verify the live system
+
+Read-only endpoint checks and Cloudflare's CPU measurements are available without enabling stored logs or a paid service:
+
+```powershell
+node scripts/verify-live.mjs
+& .\scripts\worker-metrics.ps1
+# After completing App setup, require an active GitHub connection:
+node scripts/verify-live.mjs --require-configured
+```
+
+On 14 October 2026, the deployed HTTPS health endpoint returned `200` with `configured: false`, and the portal correctly returned `503`. Cloudflare's first two unconfigured invocations reported zero runtime errors, CPU p50 **0.530 ms**, and p99 **2.405 ms**. These figures do **not** validate GitHub operations, authentication, or writes within the Free plan limits. Startup time and HTTP wall-clock latency are different metrics from per-request CPU time. Analytics can be delayed or sampled; inspect the printed query time window and repeat after testing actual GitHub-backed flows. [Workers analytics](https://developers.cloudflare.com/analytics/graphql-api/tutorials/querying-workers-metrics/).
 
 Use real, authorized owner and Reader GitHub accounts. Test accounts below describe required roles; no credentials or accounts are supplied by this project.
 

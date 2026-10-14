@@ -4,10 +4,15 @@ SciDA presents research produced through interactions with AI scientific researc
 
 - Website: [scida-science.github.io](https://scida-science.github.io/)
 - Public source: [scida-science/scida-science.github.io](https://github.com/scida-science/scida-science.github.io)
+- Deployed API: [scida-api.scida-website.workers.dev](https://scida-api.scida-website.workers.dev/health)
 - Local project: `C:\Users\sarve\OneDrive\Desktop\SciDA-website`
 - Owner setup: [Deployment instructions](docs/DEPLOYMENT.md)
 
-**Current setup:** the public website and seven private storage repositories exist, and organization base permissions have been set to None. Repository contents and an owner-authorized temporary file write/read/delete have been verified. The Worker and GitHub App still need account configuration and deployment. Real GitHub login and shared writes through the deployed API remain unverified. Until it is connected, the website explicitly offers only six read-only illustrative discoveries. These are fictional examples, including their validation and publication labels. No accounts, comments, or approval decisions are fabricated.
+**Current setup:** the public website, seven private storage repositories, and deployed Worker shell exist. Organization base permissions have been set to None. Repository contents and an owner-authorized temporary file write/read/delete have been verified. The GitHub App must still be registered, installed, and connected through Worker credentials. Real GitHub login and shared writes through the deployed API remain unverified. Until it is connected, the website explicitly offers only six read-only illustrative discoveries. These are fictional examples, including their validation and publication labels. No accounts, comments, or approval decisions are fabricated.
+
+The repository's `VITE_SCIDA_API_URL` variable is set to the deployed API. The deployment workflow requires a working GitHub data connection before publishing that frontend build, preserving the existing readable site while App setup is incomplete. `SESSION_SECRET` and `DISCUSSION_SECRET` are already stored in Cloudflare; their encrypted local backups remain outside this repository.
+
+Use **Workers Free only, with $0 recurring costs**; do not enable paid plans or chargeable overages. Its 100,000 requests per day and 10 ms CPU allowance per invocation require testing the actual sign-in and storage routes after App setup. The account's billing plan has not been independently verified: the subscription API returned `403`, and the `standard` usage model does not identify the plan. Confirm Workers Free in the Cloudflare dashboard without upgrading. [Pricing and limits](https://developers.cloudflare.com/workers/platform/pricing/).
 
 ## Run on Windows
 
@@ -99,12 +104,12 @@ To add research, create a private, non-archived `discovery-*` repository in `sci
 
 The repository is the organization homepage, so Vite's base path is `/`. `HashRouter` keeps discovery refreshes working without server rewrites. If moving to a project repository, change the Vite base to `/<repository-name>/`, keep hash routes, and update the configured frontend destination and authentication callback handling accordingly.
 
-Set `VITE_SCIDA_API_URL` as a repository **Actions variable** after deploying the Worker, then rerun **Build and deploy SciDA**. Changing backend research records does not require rebuilding the frontend; changing this build-time API setting does.
+Set the repository **Actions variable** `VITE_SCIDA_API_URL` to `https://scida-api.scida-website.workers.dev` after connecting and checking the Worker, then rerun **Build and deploy SciDA**. Changing backend research records does not require rebuilding the frontend; changing this build-time API setting does.
 
 ## Verification and remaining work
 
 Automated tests cover frontend navigation/filtering/profile behavior, PKCE state and session handling, authorized API calls, server topic/access restrictions, invitation confirmation, versioned discussion, GitHub write conflicts, and material authorization. The production frontend and Worker can be checked with the commands above. These tests use controlled adapters and HTTP fixtures; they do not establish that an unconfigured external deployment is working.
 
-Before inviting real reviewers, complete [deployment and the live verification checklist](docs/DEPLOYMENT.md#verify-the-live-system): GitHub App registration/installation, Worker credentials, owner sign-in, a separate Reader's denied admin actions, shared persistence from a second browser, and authorized materials. Real OAuth, deployed session revocation, and writes through the installed App remain unverified until that setup is completed.
+Before inviting real reviewers, complete [deployment and the live verification checklist](docs/DEPLOYMENT.md#verify-the-live-system): GitHub App registration/installation, Worker credentials, owner sign-in, a separate Reader's denied admin actions, shared persistence from a second browser, and authorized materials. Use the exact callback `https://scida-api.scida-website.workers.dev/auth/callback`, with wildcard matching and authorization during installation disabled. Enter the GitHub client secret only in the local Wrangler prompt and upload the downloaded PEM directly from a file outside the repository. Real OAuth, deployed session revocation, writes through the installed App, and the workload's compatibility with Workers Free remain unverified until that setup is completed.
 
 This version suits a small research community. GitHub API and Worker limits, whole-file private state updates, and the absence of a transaction across repositories limit concurrency. Private Git history retains earlier personal data and session hashes; deleting a current record is not deletion from history or backups. See [operations and limits](docs/DEPLOYMENT.md#operations-and-limits) before collecting real applications at scale.

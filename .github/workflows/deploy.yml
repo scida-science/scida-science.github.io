@@ -41,6 +41,11 @@ jobs:
             echo "::warning::The GitHub backend is not configured. Public illustrative discoveries remain available; account services are unavailable."
           fi
           npm run build
+      - name: Verify configured API before publishing
+        if: github.event_name != 'pull_request' && vars.VITE_SCIDA_API_URL != ''
+        env:
+          SCIDA_API_URL: ${{ vars.VITE_SCIDA_API_URL }}
+        run: node scripts/verify-live.mjs --require-configured
       - name: Configure Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5

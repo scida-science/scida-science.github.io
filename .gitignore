@@ -12,5 +12,6 @@ coverage/
 *.pem
 *.key
 *.p12
+*.dpapi
 *.dump
 *.sql.gz
