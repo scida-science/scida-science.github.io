@@ -529,10 +529,8 @@ describe("email-bound invitations", () => {
 });
 
 describe("discussions and code requests", () => {
-  it("posts only with topic approval, including for the owner", async () => {
+  it("restricts Readers and Reviewers to their effective review authority", async () => {
     await denied(domain.addComment(READER, comment()));
-    await denied(domain.addComment(OWNER, comment()));
-    await denied(domain.addComment(APPROVER, comment()));
     const saved = await domain.addComment(
       REVIEWER,
       comment({ authorId: OWNER, createdAt: "2000-01-01" }),
@@ -547,6 +545,68 @@ describe("discussions and code requests", () => {
     );
     await domain.setAccess(OWNER, REVIEWER, "Reader", [], []);
     await denied(domain.addComment(REVIEWER, comment()));
+  });
+  it("inherits Senior Approver discussion and reply access only within assigned topics", async () => {
+    store.state.access[APPROVER].approvedTopics = ["exoplanets"];
+    const accessBefore = copy(store.state.access[APPROVER]);
+    const parent = await domain.addComment(APPROVER, comment());
+    expect(parent.authorId).toBe(APPROVER);
+    const reply = await domain.addComment(
+      APPROVER,
+      comment({ parentId: parent.id, reference: "" }),
+    );
+    expect(reply.parentId).toBe(parent.id);
+    await domain.addComment(
+      APPROVER,
+      comment({ discoveryId: "AST-002", version: "v1.1" }),
+    );
+    await denied(
+      domain.addComment(APPROVER, comment({ discoveryId: "AST-001", version: "v0.1" })),
+    );
+    expect(store.state.access[APPROVER]).toEqual(accessBefore);
+  });
+  it("allows the configured owner to review every topic without stored topic grants", async () => {
+    for (const discovery of discoveries) {
+      const saved = await domain.addComment(
+        OWNER,
+        comment({ discoveryId: discovery.id, version: discovery.version }),
+      );
+      expect(saved.authorId).toBe(OWNER);
+    }
+    expect(store.state.access[OWNER].approvedTopics).toEqual([]);
+    expect(store.state.access[OWNER].assignedTopics).toEqual([]);
+  });
+  it("removes inherited review access when an approval scope is removed or the role is demoted", async () => {
+    await domain.setAccess(OWNER, APPROVER, "Senior Approver", ["exoplanets"], ["bandit-theory"]);
+    const parent = await domain.addComment(APPROVER, comment());
+    await domain.setAccess(OWNER, APPROVER, "Senior Approver", ["exoplanets"], ["scientific-ai"]);
+    await denied(domain.addComment(APPROVER, comment({ parentId: parent.id })));
+    await domain.addComment(APPROVER, comment({ discoveryId: "AI-003", version: "v1.0" }));
+    await domain.setAccess(OWNER, APPROVER, "Approver", ["exoplanets"], []);
+    await denied(domain.addComment(APPROVER, comment({ discoveryId: "AI-003", version: "v1.0" })));
+    await domain.addComment(APPROVER, comment({ discoveryId: "AST-002", version: "v1.1" }));
+    expect(store.state.access[APPROVER].approvedTopics).toEqual(["exoplanets"]);
+  });
+  it.each(["Reader", "Reviewer", "Approver"] as const)(
+    "does not inherit review access from stale assigned topics for %s",
+    async (role) => {
+      store.state.access[OTHER] = {
+        role,
+        approvedTopics: role === "Reader" ? ["bandit-theory"] : ["exoplanets"],
+        assignedTopics: ["bandit-theory"],
+      };
+      await denied(domain.addComment(OTHER, comment()));
+    },
+  );
+  it("rechecks inherited review scope immediately before writing a reply", async () => {
+    const parent = await domain.addComment(REVIEWER, comment());
+    const readComments = store.readComments.bind(store);
+    store.readComments = async (record) => {
+      store.state.access[APPROVER].assignedTopics = ["exoplanets"];
+      return readComments(record);
+    };
+    await denied(domain.addComment(APPROVER, comment({ parentId: parent.id })));
+    expect(store.discussions["AI-001"]).toHaveLength(1);
   });
   it("preserves parent manuscript versions after the brief changes", async () => {
     const parent = await domain.addComment(REVIEWER, comment());
@@ -796,7 +856,27 @@ describe("discovery content, visibility, and materials", () => {
     await domain.authorizeMaterial(REVIEWER, "AI-001", "figures");
     await denied(domain.authorizeMaterial(REVIEWER, "AI-001", "data"), 404);
     await domain.authorizeMaterial(OWNER, "AI-001", "data");
-    await denied(domain.authorizeMaterial(OWNER, "AI-001", "figures"), 404);
+    await domain.authorizeMaterial(OWNER, "AI-001", "figures");
+    await domain.authorizeMaterial(APPROVER, "AI-001", "figures");
+  });
+  it("uses current inherited review scopes for material links and direct material requests", async () => {
+    store.records[0].document.materials.paper = { path: "paper.pdf", access: "reviewer" };
+    store.records[1].document.materials.paper = { path: "paper.pdf", access: "reviewer" };
+    const allowedBrief = (await domain.portal(APPROVER)).state.discoveries.find(
+      (item) => item.id === "AI-001",
+    )!;
+    expect(allowedBrief.materials.paper).toBe(
+      "https://api.example.test/v1/discoveries/AI-001/materials/paper",
+    );
+    await domain.authorizeMaterial(APPROVER, "AI-001", "paper");
+    await denied(domain.authorizeMaterial(APPROVER, "AST-001", "paper"), 404);
+    await domain.setAccess(OWNER, APPROVER, "Senior Approver", [], ["exoplanets"]);
+    await denied(domain.authorizeMaterial(APPROVER, "AI-001", "paper"), 404);
+    const restrictedBrief = (await domain.portal(APPROVER)).state.discoveries.find(
+      (item) => item.id === "AI-001",
+    )!;
+    expect(restrictedBrief.materials.paper).toBeNull();
+    expect(restrictedBrief.restrictedMaterials).toContain("paper");
   });
   it.each([
     "../secret",

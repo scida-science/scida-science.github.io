@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { topics } from "../data/discoveries";
+import { reviewTopics } from "../services/permissions";
 import { usePortal } from "../state/PortalContext";
 import type { ActionResult, Field, ProfileInput, TopicId } from "../types";
 
@@ -38,6 +39,7 @@ export default function ProfilePage() {
   const applications = state.applications.filter(
     (application) => application.userId === user.id,
   );
+  const effectiveReviewTopics = reviewTopics(user);
   const latestApplication = [...applications].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt),
   )[0];
@@ -265,8 +267,8 @@ export default function ProfilePage() {
           <div>
             <dt>Approved review topics</dt>
             <dd>
-              {user.approvedTopics.length > 0
-                ? user.approvedTopics
+              {effectiveReviewTopics.length > 0
+                ? effectiveReviewTopics
                     .map(
                       (id) =>
                         topics.find((topic) => topic.id === id)?.label ?? id,

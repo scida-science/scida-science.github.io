@@ -10,7 +10,7 @@ import {
 } from "../lib/api";
 import type { Invitation, Profile, ProfileInput } from "../types";
 import { createGitHubAuth, OAUTH_KEY } from "./auth";
-import { canDiscuss, canManageTopic, canReviewApplication } from "./permissions";
+import { canDiscuss, canManageTopic, canReviewApplication, reviewTopics } from "./permissions";
 import { createPortalService, type PortalService } from "./portalService";
 import { emptyPortalState } from "./repository";
 
@@ -212,7 +212,8 @@ describe("Senior Approver permissions", () => {
     expect(user?.role).toBe("Senior Approver");
     expect(canManageTopic(user, "bandit-theory")).toBe(true);
     expect(canManageTopic(user, "exoplanets")).toBe(false);
-    expect(canDiscuss(user, discoveries[0])).toBe(false);
+    expect(canDiscuss(user, discoveries[0])).toBe(true);
+    expect(canDiscuss(user, discoveries.find((item) => item.topic === "exoplanets")!)).toBe(false);
     expect(canReviewApplication(user, {
       id: "application", userId: "other", topics: ["bandit-theory"],
       evidence: "Research evidence", status: "Pending", createdAt: "2026-10-14T10:00:00Z",
@@ -232,6 +233,46 @@ describe("Senior Approver permissions", () => {
     expect(canDiscuss(user, discoveries[0])).toBe(true);
     expect((await service.actions.createInvitation(["bandit-theory"], "other@example.test")).ok).toBe(false);
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/v1/invitations"))).toBe(false);
+  });
+
+  it("combines approval scope with explicit review grants without expanding approval authority", () => {
+    const senior: Profile = {
+      ...profile("Senior Approver"),
+      assignedTopics: ["bandit-theory"],
+      approvedTopics: ["bandit-theory", "exoplanets"],
+    };
+    expect(reviewTopics(senior)).toEqual(["bandit-theory", "exoplanets"]);
+    expect(canManageTopic(senior, "exoplanets")).toBe(false);
+    expect(senior.approvedTopics).toEqual(["bandit-theory", "exoplanets"]);
+  });
+
+  it("removes inherited review access after a scope change or demotion on refresh", async () => {
+    const { service, setProfile } = setup();
+    const senior: Profile = {
+      ...profile("Senior Approver"),
+      assignedTopics: ["bandit-theory"],
+      approvedTopics: ["exoplanets"],
+    };
+    setProfile(senior);
+    await service.start();
+    expect(reviewTopics(service.getSnapshot().user)).toEqual(["bandit-theory", "exoplanets"]);
+    setProfile({ ...senior, assignedTopics: ["scientific-ai"] });
+    await service.actions.refresh();
+    expect(reviewTopics(service.getSnapshot().user)).toEqual(["scientific-ai", "exoplanets"]);
+    setProfile({ ...senior, role: "Approver" });
+    await service.actions.refresh();
+    expect(reviewTopics(service.getSnapshot().user)).toEqual(["exoplanets"]);
+  });
+
+  it("grants the Admin review access wherever they can approve and ignores stale Reader scopes", () => {
+    const admin = profile("Admin");
+    for (const discovery of discoveries) {
+      expect(canManageTopic(admin, discovery.topic)).toBe(true);
+      expect(canDiscuss(admin, discovery)).toBe(true);
+    }
+    expect(reviewTopics(null)).toEqual([]);
+    expect(reviewTopics({ ...profile(), approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"] })).toEqual([]);
+    expect(reviewTopics({ ...profile("Approver"), assignedTopics: ["bandit-theory"] })).toEqual([]);
   });
 });
 

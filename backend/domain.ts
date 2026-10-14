@@ -165,7 +165,8 @@ export function createDomain(
   const canDiscuss = (current: Profile | null, discovery: Discovery) =>
     !!current &&
     current.role !== "Reader" &&
-    current.approvedTopics.includes(discovery.topic);
+    (canApprove(current, [discovery.topic]) ||
+      current.approvedTopics.includes(discovery.topic));
   const canView = (current: Profile | null, document: DiscoveryDocument) =>
     document.visibility === "public" || !!current;
   function materialAllowed(

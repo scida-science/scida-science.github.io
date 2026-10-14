@@ -4,6 +4,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import AccessPage from "./AccessPage";
+import ProfilePage from "./ProfilePage";
 import type { usePortal } from "../state/PortalContext";
 import type { Profile } from "../types";
 
@@ -127,5 +128,82 @@ describe("Reviewer topic selection and researcher search", () => {
     expect(screen.queryByRole("region", { name: "Invite a reviewer" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Manage researcher access" })).toBeNull();
     expect(screen.queryByText("Assigned approval topics:")).toBeNull();
+  });
+
+  it("assigns approval topics once and keeps optional review topics separate", async () => {
+    const interaction = userEvent.setup();
+    portal.user = { ...reader, id: "owner", fullName: "Site Owner", role: "Admin" };
+    portal.state.profiles = [portal.user, structuredClone(reader)];
+    openAccess();
+    const management = screen.getByRole("region", { name: "Manage researcher access" });
+    await interaction.selectOptions(within(management).getByRole("combobox", {
+      name: "Role for Test Researcher",
+    }), "Senior Approver");
+    const approval = within(management).getByRole("group", {
+      name: "Assigned approval topics for Test Researcher",
+    });
+    const additional = within(management).getByRole("group", {
+      name: "Additional review topics for Test Researcher (optional)",
+    });
+    expect(within(management).getAllByRole("group")).toEqual([approval, additional]);
+    await interaction.selectOptions(within(additional).getByRole("combobox"), "Artificial Intelligence");
+    await interaction.click(within(additional).getByRole("checkbox", { name: /^Scientific AI/ }));
+    await interaction.click(within(management).getByRole("button", { name: "Save access for Test Researcher" }));
+    expect(portal.setAccess).not.toHaveBeenCalled();
+    expect(within(management).getByRole("alert").textContent).toContain("Choose at least one assigned approval topic");
+    await interaction.selectOptions(within(approval).getByRole("combobox"), "Artificial Intelligence");
+    await interaction.click(within(approval).getByRole("checkbox", { name: /^Bandit theory/ }));
+    expect(within(additional).queryByRole("checkbox", { name: /^Bandit theory/ })).toBeNull();
+    await interaction.click(within(management).getByRole("button", { name: "Save access for Test Researcher" }));
+    expect(portal.setAccess).toHaveBeenCalledWith("123", "Senior Approver", ["scientific-ai"], ["bandit-theory"]);
+    await interaction.click(within(additional).getByRole("checkbox", { name: /^Scientific AI/ }));
+    await interaction.click(within(management).getByRole("button", { name: "Save access for Test Researcher" }));
+    expect(portal.setAccess).toHaveBeenLastCalledWith("123", "Senior Approver", [], ["bandit-theory"]);
+  });
+
+  it("preserves separate review grants when approval topics overlap or change", async () => {
+    const interaction = userEvent.setup();
+    portal.user = { ...reader, id: "owner", fullName: "Site Owner", role: "Admin" };
+    portal.state.profiles = [portal.user, {
+      ...reader, role: "Senior Approver", approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"],
+    }];
+    openAccess();
+    const management = screen.getByRole("region", { name: "Manage researcher access" });
+    const approval = within(management).getByRole("group", { name: "Assigned approval topics for Test Researcher" });
+    const additional = within(management).getByRole("group", { name: "Additional review topics for Test Researcher (optional)" });
+    await interaction.selectOptions(within(additional).getByRole("combobox"), "Astronomy");
+    await interaction.click(within(additional).getByRole("checkbox", { name: /^Exoplanets/ }));
+    await interaction.click(within(management).getByRole("button", { name: "Save access for Test Researcher" }));
+    expect(portal.setAccess).toHaveBeenLastCalledWith("123", "Senior Approver", ["bandit-theory", "exoplanets"], ["bandit-theory"]);
+    await interaction.click(within(approval).getByRole("button", { name: "Remove Bandit theory from assigned approval topics for test researcher" }));
+    await interaction.selectOptions(within(approval).getByRole("combobox"), "Artificial Intelligence");
+    await interaction.click(within(approval).getByRole("checkbox", { name: /^Scientific AI/ }));
+    await interaction.selectOptions(within(additional).getByRole("combobox"), "Artificial Intelligence");
+    expect((within(additional).getByRole("checkbox", { name: /^Bandit theory/ }) as HTMLInputElement).checked).toBe(true);
+    await interaction.click(within(management).getByRole("button", { name: "Save access for Test Researcher" }));
+    expect(portal.setAccess).toHaveBeenLastCalledWith("123", "Senior Approver", ["bandit-theory", "exoplanets"], ["scientific-ai"]);
+  });
+
+  it.each(["Senior Approver", "Admin"] as const)("shows inherited review access for %s on access and profile pages", async (role) => {
+    const interaction = userEvent.setup();
+    portal.user = { ...reader, role, approvedTopics: [], assignedTopics: ["bandit-theory"] };
+    openAccess();
+    const currentAccess = screen.getByRole("region", { name: "Your current access" });
+    expect(within(currentAccess).getByText("Approved review topics:").parentElement?.textContent).toContain("Bandit theory");
+    const application = screen.getByRole("region", { name: "Apply for reviewer access" });
+    if (role === "Senior Approver") {
+      await interaction.selectOptions(within(application).getByRole("combobox"), "Artificial Intelligence");
+      expect(within(application).queryByRole("checkbox", { name: /^Bandit theory/ })).toBeNull();
+      expect(within(application).getByRole("checkbox", { name: /^Scientific AI/ })).toBeTruthy();
+    } else {
+      expect(within(application).queryByRole("combobox")).toBeNull();
+    }
+    cleanup();
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    const standing = screen.getByRole("region", { name: "Reviewer access" });
+    const reviewDetails = within(standing).getByText("Approved review topics").parentElement;
+    expect(reviewDetails?.textContent).toContain("Bandit theory");
+    if (role === "Admin") expect(reviewDetails?.textContent).toContain("Exoplanets");
+    else expect(reviewDetails?.textContent).not.toContain("Exoplanets");
   });
 });

@@ -78,9 +78,9 @@ The Worker enforces every permission using the current private records:
 - Readers maintain their own profiles, request code, and apply for review topics.
 - Reviewers post and reply only within approved topics. Approval for bandit theory grants no astronomy access.
 - Ordinary Approvers can discuss research within approved topics. They cannot approve applications or create invitations.
-- Senior Approvers assess other researchers and create invitations only within assigned topics. They cannot appoint roles. Invitations cease to be valid if their creator loses the necessary approval authority.
+- Senior Approvers assess other researchers and create invitations only within assigned topics. Those topics automatically include discussion and reviewer-material access; additional topics can receive review-only access. They cannot appoint roles. Invitations cease to be valid if their creator loses the necessary approval authority.
 - Only the owner edits discovery content/status and appoints Approvers or Senior Approvers. Admin status comes exclusively from `ADMIN_GITHUB_ID`, currently `89913681` for the verified owner `SarveshVGharat`. Profile edits and browser storage cannot change it.
-- Discussion participation and reviewer-only materials still require explicit topic approval, including for the owner. Applications and invitations cannot be used for self-approval.
+- The owner can review all topics. For other accounts, discussion participation and reviewer-only materials require explicit topic approval or a current Senior Approver assignment for that topic. Removing an assignment removes the inherited review access; independent explicit review grants remain. Applications and invitations cannot be used for self-approval.
 
 Invitations are single use, expire after seven days, bind to the recipient's verified GitHub primary email, and require confirmation of their exact topics. Only a code hash is stored; the creator sees the raw code once. Sharing that code and responding to code requests are manual tasks; no invitation or code-request email is sent automatically.
 

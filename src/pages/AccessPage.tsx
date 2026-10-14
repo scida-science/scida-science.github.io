@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { topics } from "../data/discoveries";
 import { formatDate } from "../components/Ui";
-import { canReviewApplication } from "../services/permissions";
+import { canReviewApplication, reviewTopics } from "../services/permissions";
 import { usePortal } from "../state/PortalContext";
 import type {
   ActionResult,
@@ -275,9 +275,7 @@ function ManageAccount({
           <option>Senior Approver</option>
         </select>
       </label>
-      {(role === "Reviewer" ||
-        role === "Approver" ||
-        role === "Senior Approver") && (
+      {(role === "Reviewer" || role === "Approver") && (
         <TopicChoices
           label={`Approved review topics for ${profile.fullName}`}
           value={approved}
@@ -286,12 +284,32 @@ function ManageAccount({
         />
       )}
       {role === "Senior Approver" && (
-        <TopicChoices
-          label={`Assigned approval topics for ${profile.fullName}`}
-          value={assigned}
-          onChange={setAssigned}
-          disabled={pending}
-        />
+        <>
+          <p className="muted">
+            Approval topics also include review access. Add review topics only
+            for expertise outside that approval scope.
+          </p>
+          <TopicChoices
+            label={`Assigned approval topics for ${profile.fullName}`}
+            value={assigned}
+            onChange={setAssigned}
+            disabled={pending}
+          />
+          <TopicChoices
+            label={`Additional review topics for ${profile.fullName} (optional)`}
+            value={approved.filter((topic) => !assigned.includes(topic))}
+            allowed={topics
+              .filter((topic) => !assigned.includes(topic.id))
+              .map((topic) => topic.id)}
+            onChange={(value) =>
+              setApproved([
+                ...approved.filter((topic) => assigned.includes(topic)),
+                ...value,
+              ])
+            }
+            disabled={pending}
+          />
+        </>
       )}
       {role === "Reader" && (
         <p className="muted">
@@ -375,6 +393,7 @@ export default function AccessPage() {
   const myApplications = state.applications
     .filter((application) => application.userId === user.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const effectiveReviewTopics = reviewTopics(user);
   const invitationMatches =
     invitation?.intendedEmail.toLowerCase() === user.email.toLowerCase();
   const isApprover = user.role === "Senior Approver" || user.role === "Admin";
@@ -433,7 +452,7 @@ export default function AccessPage() {
         </div>
         <p>
           <strong>Approved review topics:</strong>{" "}
-          {topicNames(user.approvedTopics) || "None yet"}
+          {topicNames(effectiveReviewTopics) || "None yet"}
         </p>
         {user.role === "Senior Approver" && (
           <p>
@@ -467,7 +486,7 @@ export default function AccessPage() {
             value={requestedTopics}
             onChange={setRequestedTopics}
             allowed={topics
-              .filter((topic) => !user.approvedTopics.includes(topic.id))
+              .filter((topic) => !effectiveReviewTopics.includes(topic.id))
               .map((topic) => topic.id)}
             disabled={applicationPending}
           />
