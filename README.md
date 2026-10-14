@@ -1,129 +1,201 @@
 # SciDA — Scientific Discovery Agent
 
-SciDA presents research produced through interactions with AI scientific research systems and supports review by topic. The React, TypeScript, and Vite frontend runs on GitHub Pages. A Cloudflare Worker handles GitHub sign-in, permissions, and access to private GitHub repositories. No external database, KV, or D1 service is used.
+SciDA presents investigations developed with AI scientific research systems and supports review by research topic. The React, TypeScript and Vite frontend runs on GitHub Pages. A Cloudflare Worker handles GitHub sign-in, authorization and private GitHub storage. This implementation uses no external database, KV or D1 service.
 
-- Website: [scida-science.github.io](https://scida-science.github.io/)
-- Public source: [scida-science/scida-science.github.io](https://github.com/scida-science/scida-science.github.io)
-- Deployed API: [scida-api.scida-website.workers.dev](https://scida-api.scida-website.workers.dev/health)
-- Local project: `C:\Users\sarve\OneDrive\Desktop\SciDA-website`
-- Owner setup: [Deployment instructions](docs/DEPLOYMENT.md)
+This branch adds repository-backed questions and evidence figures. The three prepared astronomy investigations are **Awaiting Validation**. Their local content commits and this documentation have not been pushed or published. The six bundled frontend fallback examples remain illustrative, including their status labels.
 
-**Current setup:** the public website, seven private storage repositories, and configured Worker are deployed. Organization base permissions are None. The [SciDA Research Portal GitHub App](https://github.com/apps/scida-research-portal) is installed under `scida-science` with All repositories access; its identifiers and four Worker secrets are configured.
+Earlier deployment documentation records a connected production site and successful owner/Reader sign-in on 14 October 2026. Those are historical checks, not a fresh verification of deployed connectivity or successful reviewer posting. The new figure support and real astronomy content still require a coordinated release. See [verification and remaining work](#verification-and-remaining-work).
 
-Real GitHub sign-in succeeded for the owner and a second authorized account. The owner confirmed Admin access; the second account starts as Reader with no approved topics. The Reader saved Artificial Intelligence and Bandit theory in their profile, confirmed both after refresh, and the selections were independently verified in private GitHub storage without any change to review permissions. The owner also confirmed that three live authenticated Reader probes returned HTTP 403: managing account access, editing a discovery, and discussing an unapproved Astronomy topic. The live API reads all six private discovery records and rejects anonymous admin actions, malformed credentials, and foreign-origin submissions.
+## Repository map
 
-Further live reviewer approval and discussion testing is **deferred at the owner's request until actual discoveries are added**. The temporary verification page and profile link have been removed. All six current discoveries remain fictional examples, including their validation and publication labels. No accounts, comments, or approval decisions are fabricated. Keep the remaining live checks explicit; passing Reader restrictions does not verify successful reviewer posting.
+| Location | Purpose |
+| --- | --- |
+| [src/](src/) | Frontend, routing, account state and API client |
+| [src/pages/HomePage.tsx](src/pages/HomePage.tsx) | Scrolling discovery feed and detail-page links |
+| [src/pages/DiscoveryPage.tsx](src/pages/DiscoveryPage.tsx) | Research sections, figures, downloads, code requests and discussion |
+| [src/components/EvidenceFigure.tsx](src/components/EvidenceFigure.tsx) | Authenticated PNG loading, captions and alt text |
+| [src/data/discoveries.ts](src/data/discoveries.ts) | Six illustrative fallback briefs; not the connected site's scientific source |
+| [backend/](backend/) | Worker routes, GitHub storage, permissions and OAuth |
+| [docs/discovery.schema.json](docs/discovery.schema.json) | Discovery-document schema, version 1 |
+| [docs/REPOSITORY_CONTENT.md](docs/REPOSITORY_CONTENT.md) | Evidence fields, provenance conventions and release boundary |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment procedure and dated operational observations |
+| [scripts/](scripts/) | Build, runtime checks, content validation and owner setup helpers |
+| [.github/workflows/deploy.yml](.github/workflows/deploy.yml) | Tests, frontend build and Pages deployment |
+| `dist/`, `.worker-dist/` | Ignored generated frontend and packaged Worker output |
 
-The owner intends the forthcoming real discovery summaries to be public, including for signed-out visitors. Importing them is deferred until the source material is supplied; the private repositories and supporting-file access remain separate from summary visibility.
+Private manuscripts, scientific inputs, internal records and correspondence do not belong in this public website repository. Private investigation repositories hold their own briefs and selected materials. The full executable scientific bundles are separate from these compact website selections.
 
-The repository's `VITE_SCIDA_API_URL` variable is set to the deployed API. The deployment workflow requires a working GitHub data connection before publishing. `SESSION_SECRET` and `DISCUSSION_SECRET` are stored in Cloudflare; their encrypted local backups remain outside this repository.
+## Local setup and preview
 
-Use **Workers Free only, with $0 recurring costs**; do not enable paid plans or chargeable overages. Its 100,000 requests per day and 10 ms CPU allowance per invocation require testing the actual sign-in and storage routes after App setup. The owner confirmed **Workers Free** in the Cloudflare dashboard on 14 October 2026. Wrangler's subscription API returned `403`, so this plan confirmation comes from the owner, not an independent API check. [Pricing and limits](https://developers.cloudflare.com/workers/platform/pricing/).
+Use **Node.js 24** and npm, matching CI. The documentation audit used Node 24.15.0 and npm 11.12.1 on Windows. The lockfile fixes dependencies. Installation needs package-registry access; local examples and fixture tests need no GitHub or Cloudflare credentials once dependencies are installed.
 
-## Run on Windows
-
-Use Node.js 24 and npm. Resolve the Windows Desktop folder to accommodate OneDrive redirection:
+From this repository's root in PowerShell:
 
 ```powershell
-Set-Location (Join-Path ([Environment]::GetFolderPath('Desktop')) 'SciDA-website')
 npm.cmd ci
-if (-not (Test-Path -LiteralPath '.env.local')) { Copy-Item .env.example .env.local }
+if (-not (Test-Path -LiteralPath '.env.local')) {
+    Copy-Item -LiteralPath '.env.example' -Destination '.env.local'
+}
 npm.cmd run dev
 ```
 
-Open the printed address, normally `http://127.0.0.1:5173/`. Leave `VITE_SCIDA_API_URL` blank for the read-only examples. Once the Worker is ready, set that variable to its public HTTPS origin and restart Vite. No token or client secret belongs in a `VITE_` variable. The build allows only `VITE_SCIDA_API_URL`.
+Use `npm` instead of `npm.cmd` on other platforms. Open Vite's printed address, normally `http://127.0.0.1:5173/`. Stop it with `Ctrl+C`. The copy command preserves existing configuration; choose the intended mode in your own `.env.local`:
+
+- **UI-only examples:** leave `VITE_SCIDA_API_URL` blank. Six read-only illustrative briefs appear; account services and code requests are unavailable.
+- **Connected frontend:** set that variable to the intended Worker origin and restart Vite. This reads that Worker's actual repositories. Placing private checkouts beside this project does not automatically load them into Vite.
+- **Build preview:** use the commands below. Preview serves `dist/`, normally at `http://127.0.0.1:4173/`; it does not start a Worker. API configuration is fixed at build time, so rebuild after changing it.
 
 ```powershell
-npm.cmd test
-npm.cmd run check:backend
-npm.cmd run build:backend
-npm.cmd run test:worker
 npm.cmd run build
 npm.cmd run preview
 ```
 
-The frontend build is written to `dist/`; preview normally uses `http://127.0.0.1:4173/`. `build:backend` checks packaging without deploying. Stop a local server with `Ctrl+C`. Backend-only tests are available with `npm.cmd run test:backend`.
+Only `VITE_SCIDA_API_URL` is allowed as frontend configuration. It must be an HTTPS origin, or HTTP on localhost/127.0.0.1 for development, without credentials, path, query or fragment. Every `VITE_` value is browser-visible; never place secrets there. See [.env.example](.env.example) and [vite.config.ts](vite.config.ts).
 
-To start the Worker locally:
+## Checks and expected outputs
+
+| Command from this repository | Scope or output |
+| --- | --- |
+| `npm.cmd test` | Frontend, service and backend tests, including access, conflicts and evidence metadata/transport |
+| `npm.cmd run test:backend` | Backend test subset |
+| `npm.cmd run check:backend` | Worker TypeScript checking without emitted files |
+| `npm.cmd run build:backend` | Wrangler dry-run packaging into `.worker-dist/`; no deployment |
+| `npm.cmd run test:worker` | Packaged Worker in workerd with local GitHub fixtures for signing, OAuth, access and transport |
+| `npm.cmd run build` | TypeScript checks and production frontend assets in `dist/` |
+| `node scripts/validate-discovery.mjs <content-repository>` | Schema, semantic links, asset/material paths, hashes and private claim-pointer consistency for a prepared package |
+
+For the current sibling-checkout arrangement:
 
 ```powershell
-npm.cmd run dev:backend
+node scripts/validate-discovery.mjs ../SciDA-discoveries/discovery-ast-001 ../SciDA-discoveries/discovery-ast-002 ../SciDA-discoveries/discovery-ast-003
 ```
 
-An unconfigured Worker reports account services unavailable. Full local GitHub sign-in requires a matching development callback, origins, GitHub App installation, and private local secrets; see [local backend development](docs/DEPLOYMENT.md#local-backend-development).
+Replace the directory arguments if your checkouts are elsewhere. Success prints one line per investigation with figure and traced-claim counts. These local checks need no credentials; access to the private checkouts must already have been granted separately.
 
-## Where the data lives
+The content validator currently requires the prepared packages' internal provenance format, non-illustrative records and `status: "Awaiting Validation"`. It is not a general validator for old examples or a future Published release. Update its policy deliberately when the release process changes; do not change a scientific status just to satisfy a test. Passing software checks does not establish scientific validity or novelty.
 
-| Location                                                              | Purpose                                                                                                                                          |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Public `scida-science.github.io` repository                           | Frontend, Worker source, tests, schema, and six illustrative fallback briefs only                                                                |
-| Private `scida-admin/scida/state.json`                                | Profiles, verified email identities, reviewer scopes, applications, invitations, code requests, access audit, and hashed sessions/exchange codes |
-| Private `discovery-ai-001`, `discovery-ai-002`, `discovery-ai-003`    | Three illustrative Artificial Intelligence discovery records                                                                                     |
-| Private `discovery-ast-001`, `discovery-ast-002`, `discovery-ast-003` | Three illustrative Astronomy discovery records                                                                                                   |
-| Each discovery repository's `discovery.json`                          | Brief, manuscript version, publication stage, visibility, and explicit supporting-material access                                                |
-| Issues and issue comments in each discovery repository                | Versioned expert discussion threads written and signed by the SciDA GitHub App                                                                   |
+## How repositories supply the site
 
-The Worker uses a GitHub App **installation token** for repository operations. A researcher's GitHub user token is used only to establish identity and a verified primary email, then discarded. Researchers do not need access to the underlying private repositories.
+The Worker imports active, private `discovery-*` repositories in the configured organization that the GitHub App can access. It reads each root `discovery.json` from the repository's **default branch**, in batches of three. It uses `scida-admin` separately for accounts and workflow records. A malformed configuration or duplicate discovery ID can fail the feed; validate before releasing a record.
 
-The organization must keep repository base permissions at **None**, and researchers should not be added as direct collaborators on administrative or discovery repositories. Direct GitHub access would let them read repository contents outside SciDA's topic and material permissions. Organization owners retain administrative repository access. See [GitHub's repository roles](https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/repository-roles-for-an-organization).
+| Prepared repository | Stable ID | Investigation |
+| --- | --- | --- |
+| `discovery-ast-001` | `AST-001` | GRB 180411A dust-echo candidate |
+| `discovery-ast-002` | `AST-002` | TOI-475 ephemeris discrepancy |
+| `discovery-ast-003` | `AST-003` | TIC 233166139 stellar-binary mass ratio |
 
-Private repository storage does not automatically make a research brief private: `visibility: "public"` deliberately exposes its brief and discussion through the website. Only the six illustrative records are provisioned with public visibility. Use explicit `visibility: "signed-in"` for new research unless publication is intended. Material permissions are configured separately.
+Repository names identify storage; `discovery.id` identifies the website page, such as `/#/discoveries/AST-002`. The existing `discovery-ai-*` records and unconfigured examples are separate from these prepared astronomy briefs.
 
-## Accounts and permissions
+Each document has four top-level fields:
 
-SciDA uses **Sign in with GitHub**. GitHub handles registration, passwords, recovery, and account security. The website has no password form or role selector. On first sign-in, the verified GitHub numeric ID receives Reader access, except for the configured owner identity.
+| Field | Contract |
+| --- | --- |
+| `schemaVersion` | `1` |
+| `visibility` | `public` or `signed-in`; controls the brief, selected inline figures and discussion |
+| `discovery` | ID, title, field/topic, status, summary, timestamp/version, review note, sections and optional question/evidence fields |
+| `materials` | Authoritative `paper`, `appendix`, `figures`, `data` and `repository` entries: null, or a relative path/HTTPS URL with an access policy |
 
-The Worker enforces every permission using the current private records:
+The scrolling card uses `title`, `question`, `summary`, `status`, `reviewNote`, `updatedAt` and the figure named by `headlineFigureId`, then links to the detail page. The detail page renders `sections` in order and places each figure beside its matching `sectionId`. Paragraph breaks are retained; optional equations load KaTeX only when needed.
 
-- Readers maintain their own profiles, request code, and apply for review topics.
-- Reviewers post and reply only within approved topics. Approval for bandit theory grants no astronomy access.
-- Ordinary Approvers can discuss research within approved topics. They cannot approve applications or create invitations.
-- Senior Approvers assess other researchers and create invitations only within assigned topics. Those topics automatically include discussion and reviewer-material access; additional topics can receive review-only access. They cannot appoint roles. Invitations cease to be valid if their creator loses the necessary approval authority.
-- Only the owner edits discovery content/status and appoints Approvers or Senior Approvers. Admin status comes exclusively from `ADMIN_GITHUB_ID`, currently `89913681` for the verified owner `SarveshVGharat`. Profile edits and browser storage cannot change it.
-- The owner can review all topics. For other accounts, discussion participation and reviewer-only materials require explicit topic approval or a current Senior Approver assignment for that topic. Removing an assignment removes the inherited review access; independent explicit review grants remain. Applications and invitations cannot be used for self-approval.
+Each figure has `id`, repository-relative PNG `path`, `caption`, `alt` and `sectionId`. Figure IDs must be unique, the headline must identify one of them and section targets must exist. The schema permits up to 12 figures. The image endpoint checks authorization, PNG signature and a 16 MiB limit. Captions should distinguish statistical intervals, systematic ranges and illustrative models.
 
-Invitations are single use, expire after seven days, bind to the recipient's verified GitHub primary email, and require confirmation of their exact topics. Only a code hash is stored; the creator sees the raw code once. Sharing that code and responding to code requests are manual tasks; no invitation or code-request email is sent automatically.
+The frontend reads `/v1/portal` and requests images through `/v1/discoveries/{id}/evidence/{figureId}`. It uses the existing SciDA session and revocable browser object URLs. Images stay in the investigation repository; no GitHub credential or private GitHub download URL reaches the browser.
 
-Profiles support selected research fields and matching expertise topics, an optional Google Scholar link, and application evidence. Scholar is not scraped. Email comes from the verified GitHub identity and is not editable in the profile. Other users' private email addresses are not exposed with discussion authors.
+PDFs and downloads use `/v1/discoveries/{id}/materials/{kind}`. A repository `path` is streamed as an authorized attachment. For an HTTPS `url`, the Worker returns the link after authorization; it does not fetch it or send GitHub credentials to the external host. That host controls access after navigation.
 
-Reviewer applications use a research-field dropdown followed by that field's topics. Selections remain visible when switching fields. The owner can search researcher access records by name, public GitHub username, affiliation, role, or account ID. Saved profile expertise determines the signed-in **For you** homepage: matching topics come first, followed by the chosen fields and then other research. **Recent discoveries** remains chronological, and personalization never grants review permissions.
+Keep all nested `discovery.materials` compatibility slots **null** in repository documents. The top-level map is authoritative; the API generates accessible endpoints. Paths cannot contain traversal, encoded segments, backslashes or URL delimiters. Reuse one PDF path when appendices are in the paper; use null if there is no appendix. Missing and restricted materials have different UI messages.
 
-## Authentication and refresh behavior
+## Accounts, access and code requests
 
-The browser creates a PKCE verifier and random state, then navigates to the Worker and GitHub. The Worker uses an encrypted, HttpOnly cookie during this first-party OAuth flow. The callback returns a single-use exchange code to `/#/auth/callback`; the browser validates state, exchanges the code, and removes callback parameters. This avoids dependence on third-party cookies.
+Public visibility exposes the brief, selected images and rendered discussion through SciDA even though GitHub storage is private. Signed-in briefs require an account. Inline figures inherit brief visibility; there is no per-figure access policy.
 
-Only an opaque, revocable SciDA session is held in `sessionStorage`, for up to eight hours. The GitHub token is never returned to the browser. Session storage supports refreshes in the same tab; it does not hold profiles, comments, or privileges. Logout revokes the server session and clears the tab. Expiry or a `401` response removes the local identity and privileges. A failed server revocation is reported explicitly.
+| Material access | Requirement |
+| --- | --- |
+| `public` | Permission to see the discovery |
+| `reader` | A signed-in account that can see it |
+| `reviewer` | Review access for its topic, including current Senior Approver scope or the owner |
+| `admin` | Configured owner identity |
 
-Visible pages refresh shared data every two minutes and when the tab regains focus. The Refresh control is also available. The backend reads current account permissions, sessions, discovery visibility, and material policies for each request; only short-lived GitHub installation tokens are cached. Configured API failures remain visible and never activate simulated accounts or fake successful submissions.
+The prepared astronomy records configure public briefs/selected images for a future release, with sign-in required for papers and supporting downloads. They expose no code-repository link. Local preparation does not make these arrangements live.
 
-Discovery files load in batches of three independent GitHub reads to reduce waiting while keeping permissions fresh. Mathematical rendering code and fonts load only when a brief contains an equation. GitHub sign-in does not wait for the public discovery feed to finish loading.
+GitHub handles identity, passwords and recovery. A researcher's GitHub token establishes identity and verified primary email, then is discarded; repository operations use an App installation token. The browser holds only a revocable SciDA session in `sessionStorage`, for up to eight hours. OAuth uses PKCE, state, a first-party HttpOnly cookie and a single-use exchange code. Logout revokes the session; expiry or HTTP 401 clears the local identity. Configured API failures remain visible and never fabricate accounts or successful actions.
 
-During sign-in, repository privacy verification and the current administrative file read run concurrently. Both must succeed before any record is returned or changed. GitHub redirects and the two durable single-use-code/session writes still take network time; no authentication check is skipped to simulate faster login.
+- **Readers** manage their own profiles, request code and apply for review topics.
+- **Reviewers** discuss discoveries in approved topics.
+- **Approvers** have approved-topic review access but cannot approve others or create invitations merely by holding that role.
+- **Senior Approvers** assess other researchers and create invitations within assigned topics; those assignments also grant review/material access in the same topics.
+- **Admin** is selected solely by `ADMIN_GITHUB_ID`, manages roles and research content/status, and has all-topic review access. Profile edits and browser storage cannot assign this role.
 
-## Edit discoveries and materials
+Invitations are single-use, expire after seven days and bind to a verified email and exact topics. Revocations govern subsequent permission checks. Profile interests personalize **For you** without granting review access; **Recent discoveries** remains chronological. Scholar links are optional and not scraped. Other users' private email addresses are not published with discussion authors.
 
-For a connected site, edit the appropriate private repository's `discovery.json`, or use the owner-only research editor. The stable `discovery.id` determines the page URL, for example `/#/discoveries/AI-001`. Advance `version` when changing the manuscript and `updatedAt` when editing directly on GitHub. New discussions attach to the current version; replies remain attached to their original thread's version.
+Signed-in readers submit code requests with an explanation. Requests are recorded for the requester and administrator. **No email, repository invitation, license grant or code delivery happens automatically.** The owner must handle fulfillment and decide what can be shared. Review permission is not direct GitHub repository access.
 
-The owner manages file paths, external URLs, and material access in the **top-level** `materials` map in `discovery.json`; these fields are read-only in the website editor. Keep `discovery.materials` compatibility fields null in repository documents. Missing top-level entries remain null and show “Not uploaded yet.” Restricted material is distinguished from missing material. The Worker generates authorized download endpoints and streams private files as attachments; the frontend does not receive a private GitHub download URL or repository token.
+Keep organization repository base permissions at None and avoid direct collaborator/team access for portal researchers: it bypasses SciDA's restrictions. Owners retain underlying repository access. Keep internal records and correspondence outside public fields and served material/figure maps; describe their purpose without copying their contents into public documentation.
 
-Use [the discovery schema](docs/discovery.schema.json) and [the material examples](docs/DEPLOYMENT.md#discovery-format-and-supporting-materials). Keep real manuscripts, unpublished data, and private links out of this public website repository.
+## Add or update an investigation
 
-To change the six **unconfigured frontend examples**, edit the typed file [src/data/discoveries.ts](src/data/discoveries.ts). It is also the source for initial illustrative repository seeds. Updating this source does not overwrite existing private research records. The [provisioning script](scripts/provision-repositories.ps1) creates missing repositories/files and preserves existing files.
+1. Use a dedicated branch in the appropriate private content repository. A new investigation needs a private, active `discovery-*` repository with Issues enabled and a unique stable ID. Repository creation and release are separate owner actions.
+2. Read the current manuscript and results. Update the question, summary, context, methods, uncertainty, limitations, contributions and availability together. Computational checks do not establish human approval, physical confirmation or novelty.
+3. Add selected PNGs with traceable captions/alt text. Keep headline and section IDs consistent. Reference an existing paper path where practical; update its material mapping if it moves. Distinguish the compact website selection from the full executable research bundle.
+4. Maintain private claim/provenance inventories against actual source and asset bytes. They support validation and maintenance, not public rendering. Check that public fields/downloads contain no internal notes or correspondence.
+5. Advance `updatedAt` for metadata changes and `version` for manuscript changes. Do not add the API-only `revision` SHA to repository JSON. The editor rejects stale revisions; existing discussion threads retain their original manuscript version.
+6. Validate content and paths. The owner editor handles research text/status while preserving repository-managed visibility, material policies and figure paths. Manage these and figure captions directly in the private repository.
+7. Commit for review. A content branch is not a live preview source. Following a separately authorized release, default-branch content appears on refresh without a frontend rebuild. Matching schema/backend/rendering changes must be released first.
 
-To add research, create a private, non-archived `discovery-*` repository in `scida-science`, add a valid root `discovery.json` on its default branch, and enable Issues. The owner has chosen **All repositories** for the App installation, so future repositories are included automatically. The connected website discovers valid records on refresh; a GitHub Pages rebuild or another installation-selection step is unnecessary. The App's GitHub permission grant covers all organization repositories, while SciDA imports only matching private discoveries and uses `scida-admin` separately. [Detailed steps](docs/DEPLOYMENT.md#adding-a-discovery).
+The recorded App installation uses All repositories; selected-repository installations instead need each new repository explicitly added. App permissions are broader than SciDA's private-discovery import filter. The [provisioning helper](scripts/provision-repositories.ps1) creates missing repositories/files and preserves existing records; it does not synchronize scientific content. Editing `src/data/discoveries.ts` does not overwrite private discoveries.
 
-## GitHub Pages deployment
+## Configuration and local Worker development
 
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml) tests the application, checks/packages the Worker, builds the frontend, and deploys GitHub Pages on pushes to `main`. It does not deploy the Worker or receive Worker secrets.
+[backend/env.ts](backend/env.ts) defines required configuration. [backend/wrangler.jsonc](backend/wrangler.jsonc) holds non-secret deployment settings and the configured production origins.
 
-The repository is the organization homepage, so Vite's base path is `/`. `HashRouter` keeps discovery refreshes working without server rewrites. If moving to a project repository, change the Vite base to `/<repository-name>/`, keep hash routes, and update the configured frontend destination and authentication callback handling accordingly.
+| Setting | Purpose |
+| --- | --- |
+| `FRONTEND_ORIGIN`, `API_ORIGIN` | Exact origins without trailing slash |
+| `GITHUB_ORG`, `ADMIN_REPOSITORY` | Organization and private account-state repository |
+| `ADMIN_GITHUB_ID` | Numeric owner identity; Admin bootstrap mechanism |
+| `GITHUB_APP_ID`, `GITHUB_CLIENT_ID`, `GITHUB_INSTALLATION_ID` | App and installation identifiers |
+| `GITHUB_CLIENT_SECRET`, `GITHUB_PRIVATE_KEY` | Worker secrets for OAuth and installation authentication |
+| `SESSION_SECRET`, `DISCUSSION_SECRET` | Separate Worker secrets of at least 32 characters for OAuth-cookie protection and signed discussions |
+| `VITE_SCIDA_API_URL` | Sole browser-visible build setting; a repository Actions variable for Pages |
 
-Set the repository **Actions variable** `VITE_SCIDA_API_URL` to `https://scida-api.scida-website.workers.dev` after connecting and checking the Worker, then rerun **Build and deploy SciDA**. Changing backend research records does not require rebuilding the frontend; changing this build-time API setting does.
+Use secret stores or ignored development files for values. Preserve the discussion secret: rotation without migration makes historical signatures unverifiable. Rotating the OAuth-cookie secret does not revoke existing server sessions. Fixture tests require none of these secret values.
+
+Authenticated local development needs a development App, controlled repositories, matching identifiers and callback `http://127.0.0.1:8787/auth/callback`. Put the four secrets in ignored `backend/.dev.vars`, beside Wrangler's configuration. Configure development identifiers deliberately; local Worker integration can write real GitHub records and is not a simulated backend.
+
+```powershell
+npm.cmd run dev:backend -- --var FRONTEND_ORIGIN:http://127.0.0.1:5173 --var API_ORIGIN:http://127.0.0.1:8787
+```
+
+Set the frontend's ignored `.env.local` to `VITE_SCIDA_API_URL=http://127.0.0.1:8787` and start Vite in another terminal. Keep exact origins/ports aligned. An unconfigured Worker reports unavailable services. Authenticated local OAuth was not exercised in this documentation pass.
+
+## Deployment — for a later authorized release
+
+No deployment commands were executed during this update. Keep the hosting policy at **Workers Free with $0 recurring cost**; do not enable paid plans or chargeable overages as part of setup.
+
+1. Confirm private storage, organization access and App installation. Required App permissions are repository Contents/Issues read-write, Metadata read-only and account email read-only. Use the exact API `/auth/callback`; disable wildcard callbacks and authorization during installation. See [deployment instructions](docs/DEPLOYMENT.md).
+2. Set identifiers and four Worker secrets using the approved local Wrangler/Cloudflare procedure. Secret operations can deploy a Worker version; they are not read-only verification. Keep keys, values and encrypted backups outside public Git history.
+3. Run the checks above. When authorized, deploy the Worker separately with `npm.cmd run deploy:backend`. `build:backend` is a dry run. `/health` reporting `configured: true` checks configuration presence, not connectivity or working OAuth.
+4. Use `node scripts/verify-live.mjs --require-configured` for read-only-effect smoke checks. It defaults to the production API and accepts `SCIDA_API_URL` as an HTTPS override. Its frontend origin is fixed in the script, so it is not a general local/staging checker. Negative authorization probes must not mutate records. Verify real authenticated/material workflows separately.
+5. Set Pages source to GitHub Actions and configure its `VITE_SCIDA_API_URL` repository variable. The [workflow](.github/workflows/deploy.yml) tests/packages the Worker and builds the frontend; it deploys Pages only from `main`. Its API smoke check runs when the API variable is configured; a blank variable can still deploy the illustrative fallback. The workflow does not deploy the Worker or receive Worker secrets.
+6. Release matching Worker/frontend support before merging metadata that uses the new figure fields. Merging a public discovery document to its default branch can expose it on the next read. Content changes need no Pages rebuild; frontend or build-time API configuration changes do.
+
+The organization homepage uses Vite base `/` and `HashRouter`. Detail-page refreshes need no server rewrites. Moving to a project-hosted site requires updating the Vite base and frontend/authentication destinations together.
 
 ## Verification and remaining work
 
-Automated tests cover frontend navigation/filtering/profile behavior, PKCE state and session handling, authorized API calls, server topic/access restrictions, invitation confirmation, versioned discussion, GitHub write conflicts, and material authorization. `test:worker` additionally runs the packaged backend in workerd with local GitHub fixtures, covering RSA signing, OAuth callback/exchange, Reader restrictions, logout, and redirect rejection. These fixtures never create production accounts or records. The production frontend and Worker can be checked with the commands above.
+The preceding content implementation passed a production build, backend type checks, **269 automated tests** and the packaged workerd fixture check. These establish specified software behavior, not astronomical validity; the application build and test suite were not repeated for this README-only change.
 
-Before inviting real reviewers, complete the remaining [live verification checklist](docs/DEPLOYMENT.md#verify-the-live-system): scoped reviewer approval, discussions, profile persistence from a second browser, session revocation, and authorized materials. Owner and Reader OAuth sign-in, profile persistence after refresh, and the Reader's denied administrative and unapproved discussion requests have succeeded. The exact callback is `https://scida-api.scida-website.workers.dev/auth/callback`, with wildcard matching and authorization during installation disabled. Future secret updates belong only in local Wrangler prompts or uploaded key files outside the repository.
+The documentation audit on **15 October 2026** checked source/configuration, package scripts and Vite development/preview CLI help. All 20 relative links and Markdown anchors in this README resolved. The documented three-repository validator command passed schema, semantic, material, asset and provenance checks for all nine PNGs and 29 traced claims. No scientific analyses, environment installations, deployments or secret inspections were performed in this audit.
 
-This version suits a small research community. GitHub API and Worker limits, whole-file private state updates, and the absence of a transaction across repositories limit concurrency. Private Git history retains earlier personal data and session hashes; deleting a current record is not deletion from history or backups. See [operations and limits](docs/DEPLOYMENT.md#operations-and-limits) before collecting real applications at scale.
+The deployment guide retains dated reports of owner/Reader sign-in, profile persistence and rejected unauthorized actions. Live reviewer approval and discussion tests were deferred until real discoveries were available and remain unfinished here. Current production connectivity, authenticated local OAuth and secret availability were not rechecked in this documentation-only update.
+
+Other operational limitations:
+
+- Browser layout verification for the new figures remains incomplete because the Browser service was unavailable. Figures were inspected separately; component tests do not replace rendered-browser checks.
+- Visible tabs refresh every 120 seconds, on focus and manually. Authorization is reread per request; only installation tokens are cached. GitHub/network latency and API/Worker limits constrain throughput. Earlier CPU measurements showed pressure against the then-documented Free allowance; capacity under real authenticated traffic is unresolved.
+- Administrative state uses whole-file SHA-checked writes with bounded retries and an approximately 2 MB read cap. There is no distributed transaction across repositories: revocation can race an already-authorized cross-repository write. Repository/discussion enumeration is bounded.
+- Git history and backups retain prior private data; deleting a current record does not erase historical copies. Define archival, retention and deletion procedures before collecting substantial personal material.
+- Only valid App-authored signed discussion envelopes render as scientific discussion. Back up private Issues and contents together and protect signing-secret continuity.
+- Contribution/citation/archive/distribution details remain unresolved where absent in the research packages. Website checks do not document human scientific approval. No repository license or author attribution is assigned by this README.
+
+See [operations and limits](docs/DEPLOYMENT.md#operations-and-limits) for implementation details and dated measurements. Keep private operational records and correspondence out of public documentation.
