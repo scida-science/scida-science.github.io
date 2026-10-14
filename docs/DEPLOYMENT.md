@@ -4,7 +4,7 @@ The frontend stays at **https://scida-science.github.io/**. The deployed API ori
 
 **Use Workers Free only, with $0 recurring costs. Do not enable a paid plan or chargeable overages.** Workers Free allows 100,000 requests per day and 10 ms of CPU time per invocation; time spent waiting for network responses is separate from CPU time. Real authentication, GitHub reads/writes, and cryptographic operations still need testing on the deployed Worker. If limits cause failures, record the failing route and runtime outcome, measure where available, and optimize before considering another hosting option. [Cloudflare pricing](https://developers.cloudflare.com/workers/platform/pricing/), [CPU limits](https://developers.cloudflare.com/workers/platform/limits/).
 
-The website source and seven private repositories have been provisioned, and the Worker shell has been deployed. The [SciDA Research Portal GitHub App](https://github.com/apps/scida-research-portal) is registered under `scida-science`; its public permissions have been verified. Installation and credentials remain pending verification and connection. A successful deployment does not establish that real OAuth or shared writes work. The owner confirmed **Workers Free** in the Cloudflare dashboard on 14 October 2026. The subscription API returned `403`, so this confirmation comes from the owner; `default_usage_model: standard` alone does not establish a billing plan. Complete the following steps using the organization owner's GitHub account and your Cloudflare account.
+The website source and seven private repositories are provisioned. The [SciDA Research Portal GitHub App](https://github.com/apps/scida-research-portal) is installed under `scida-science` with All repositories access. Its signing key, permissions, organization installation, and private storage repositories are verified. All App identifiers and four Worker secrets are deployed. The configured live API successfully reads the six private discovery records; real OAuth and authenticated writes still need verification. The owner confirmed **Workers Free** in the Cloudflare dashboard on 14 October 2026. The subscription API returned `403`, so this confirmation comes from the owner; `default_usage_model: standard` alone does not establish a billing plan. The following steps document the setup for maintenance or redeployment.
 
 ## 1. Confirm private storage and organization access
 
@@ -83,6 +83,8 @@ Account email permission is needed to verify the researcher's primary email thro
 
 Record the public App ID and Client ID, generate a client secret, and generate/download a private key. Enter the client secret only in the local Wrangler prompt described below; do not paste it into a conversation. Keep the downloaded PEM file outside this public repository and provide only its local file path when arranging the upload. The Worker accepts GitHub's downloaded PKCS#1 PEM and PKCS#8 PEM, including multiline values.
 
+In GitHub's current interface, open **Credentials → Key pairs → New key** to download the PEM; it is no longer an inline Private keys section. For this App, use [Key pairs](https://github.com/organizations/scida-science/settings/apps/scida-research-portal/key_pairs). OAuth client secrets are managed separately under [Credentials → Client secrets](https://github.com/organizations/scida-science/settings/apps/scida-research-portal/client_secrets). [Current GitHub key-generation instructions](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps#generating-private-keys).
+
 Install the App in **scida-science** with **All repositories**, as requested by the owner, so future discovery repositories are included automatically. This grants the App its Contents and Issues permissions across all current and future organization repositories, including the public website source. SciDA's backend uses `scida-admin` for administrative storage and discovers only private, unarchived `discovery-*` repositories; unrelated repositories are not imported into SciDA. Record the numeric installation ID from the installation's settings URL. Researchers authorize sign-in; they do not need to install the App themselves or join the organization. [GitHub repository-access settings](https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps#modifying-repository-access).
 
 The setup helper also supports **Only select repositories** if this policy changes later. With that choice, select `scida-admin` and the six private discovery repositories, then explicitly add each future discovery repository to the installation.
@@ -95,7 +97,7 @@ After registration and installation, the local helper can verify the App and fil
 node scripts/configure-github-app.mjs 'https://github.com/apps/YOUR-APP-SLUG' 'C:\Users\sarve\Downloads\YOUR-APP.private-key.pem'
 ```
 
-It verifies organization ownership, the matching private key, App permissions, installation scope, and required private storage repositories. It accepts All repositories and ignores unrelated repositories during storage verification. It then uploads the key directly through Wrangler's standard input. It does not display or copy the key into the project, and it revokes the temporary repository-verification token. The helper still needs testing with the actual registered App; syntax and local path safeguards have been checked. Run the client-secret prompt below separately, then deploy the completed Worker.
+It verifies organization ownership, the matching private key, App permissions, installation scope, and required private storage repositories. It accepts All repositories and ignores unrelated repositories during storage verification. It then uploads the key directly through Wrangler's standard input. It does not display or copy the key into the project, and it revokes the temporary repository-verification token. This helper has passed against the actual App and installation `171439686`; the seven required private storage repositories were confirmed. Run the client-secret prompt below separately, then deploy the completed Worker.
 
 Fill in the public identifiers in `backend/wrangler.jsonc`:
 
@@ -106,9 +108,9 @@ Fill in the public identifiers in `backend/wrangler.jsonc`:
 | `GITHUB_ORG`             | `scida-science`                                              |
 | `ADMIN_REPOSITORY`       | `scida-admin`                                                |
 | `ADMIN_GITHUB_ID`        | `89913681` — verified GitHub numeric ID for `SarveshVGharat` |
-| `GITHUB_APP_ID`          | App ID from GitHub App settings                              |
-| `GITHUB_CLIENT_ID`       | Client ID from the same App                                  |
-| `GITHUB_INSTALLATION_ID` | Organization installation ID                                 |
+| `GITHUB_APP_ID`          | `5318606`                                                    |
+| `GITHUB_CLIENT_ID`       | `Iv23liWvIlvAJaPfQb6f`                                       |
+| `GITHUB_INSTALLATION_ID` | `171439686`                                                  |
 
 The owner ID is the entire admin bootstrap mechanism: after GitHub verifies that identity, the server recognizes it as Admin. Every other new account starts as Reader. A username, email, profile field, session-storage value, or public API request cannot assign Admin. Replacing the owner requires a deliberate Worker configuration change by the deployment owner.
 
@@ -170,7 +172,9 @@ node scripts/verify-live.mjs
 node scripts/verify-live.mjs --require-configured
 ```
 
-On 14 October 2026, the deployed HTTPS health endpoint returned `200` with `configured: false`, and the portal correctly returned `503`. Cloudflare's first two unconfigured invocations reported zero runtime errors, CPU p50 **0.530 ms**, and p99 **2.405 ms**. These figures do **not** validate GitHub operations, authentication, or writes within the Free plan limits. Startup time and HTTP wall-clock latency are different metrics from per-request CPU time. Analytics can be delayed or sampled; inspect the printed query time window and repeat after testing actual GitHub-backed flows. [Workers analytics](https://developers.cloudflare.com/analytics/graphql-api/tutorials/querying-workers-metrics/).
+On 14 October 2026, the configured live API passed all six read-only checks: health `200`, allowed preflight `204`, foreign-origin rejection `403`, GitHub-backed public portal `200` with six unique discoveries and no private account records, invalid bearer rejection `401`, and anonymous admin rejection `401`. The first connected deployment exposed two runtime incompatibilities: native `fetch` called with the wrong receiver and unsupported `redirect: "error"`. Both were reproduced in workerd and corrected; redirects remain unfollowed and are rejected. These application errors were not CPU-limit failures. The packaged-runtime check now guards GitHub transport, OAuth callback/exchange, session revocation, Reader restrictions, and redirect rejection using entirely local fixtures.
+
+Startup time and HTTP wall-clock latency differ from per-request CPU time. Analytics can be delayed or sampled; inspect the printed query time window and measure actual GitHub-backed flows, especially authenticated writes. Passing read-only checks does not establish that real OAuth or discussion posting works. [Workers analytics](https://developers.cloudflare.com/analytics/graphql-api/tutorials/querying-workers-metrics/).
 
 Use real, authorized owner and Reader GitHub accounts. Test accounts below describe required roles; no credentials or accounts are supplied by this project.
 

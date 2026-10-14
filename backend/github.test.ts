@@ -621,7 +621,7 @@ describe("GitHub material boundary and upstream failures", () => {
     expect(url).toBe(
       `https://api.github.com${discoveryPath}/contents/manuscript/paper%20draft.html`,
     );
-    expect(init?.redirect).toBe("error");
+    expect(init?.redirect).toBe("manual");
     expect(new Headers(init?.headers).get("Authorization")).toBe(
       `Bearer ${token}`,
     );

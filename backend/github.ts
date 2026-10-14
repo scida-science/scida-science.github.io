@@ -28,7 +28,9 @@ const pathParts = (value: string) => value.split("/").map(segment).join("/");
 export class GitHubApi {
   constructor(
     readonly env: Env,
-    readonly fetcher: Fetcher = fetch,
+    // Workers' native fetch requires its global receiver. Calling a captured
+    // native function as this.fetcher() otherwise throws "Illegal invocation".
+    readonly fetcher: Fetcher = (input, init) => fetch(input, init),
   ) {}
   async token(): Promise<string> {
     const cacheKey = `${this.env.GITHUB_APP_ID}:${this.env.GITHUB_INSTALLATION_ID}:${this.env.GITHUB_PRIVATE_KEY}`;
@@ -77,7 +79,9 @@ export class GitHubApi {
       throw new HttpError(500, "Invalid GitHub API path.");
     return this.fetcher("https://api.github.com" + path, {
       ...init,
-      redirect: "error",
+      // Workers supports manual/follow only. Callers reject non-2xx responses,
+      // so a redirect is never followed with the installation token attached.
+      redirect: "manual",
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": apiVersion,

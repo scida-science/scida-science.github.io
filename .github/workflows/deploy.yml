@@ -33,6 +33,8 @@ jobs:
         run: npm run check:backend
       - name: Package Worker without deploying
         run: npm run build:backend
+      - name: Test packaged Worker runtime
+        run: npm run test:worker
       - name: Build website
         env:
           VITE_SCIDA_API_URL: ${{ vars.VITE_SCIDA_API_URL }}

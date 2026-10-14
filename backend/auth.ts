@@ -119,7 +119,7 @@ export function createAuth(
         "https://github.com/login/oauth/access_token",
         {
           method: "POST",
-          redirect: "error",
+          redirect: "manual",
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
@@ -148,11 +148,11 @@ export function createAuth(
       const [identityResponse, emailResponse] = await Promise.all([
         fetcher("https://api.github.com/user", {
           headers: githubHeaders,
-          redirect: "error",
+          redirect: "manual",
         }),
         fetcher("https://api.github.com/user/emails", {
           headers: githubHeaders,
-          redirect: "error",
+          redirect: "manual",
         }),
       ]);
       if (!identityResponse.ok || !emailResponse.ok)
