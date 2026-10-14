@@ -190,6 +190,10 @@ The live measurement window covering owner sign-in and subsequent reads (17:39:4
 
 Use real, authorized owner and Reader GitHub accounts. Test accounts below describe required roles; no credentials or accounts are supplied by this project.
 
+The second account's profile edit was verified in private GitHub storage: selecting Artificial Intelligence and Bandit theory persisted after refresh, while the account remained Reader with no approved review topics. Verification of the same profile in a different browser is still pending.
+
+During deployment verification, Reader and Reviewer profiles include a temporary **Open access check** link. It navigates in the same tab to `access-check.html`, which automatically checks three restricted server actions and displays their HTTP results. Its deliberately incomplete targets prevent writes even if a permission guard regresses. Missing or expired sessions receive a visible sign-in instruction; no credential is displayed or copied. Remove this temporary page and profile link after signed-in permission verification is complete.
+
 1. Open the website signed out. Confirm only public briefs/discussions appear, filters work, and a discovery survives a refresh.
 2. Select **Sign in with GitHub**, authorize the App, and return in the same tab. Confirm the owner account receives Admin and a different account receives Reader. Confirm no GitHub credential or OAuth code remains in the page URL.
 3. Edit the Reader's profile, refresh, and sign in from a second browser. Confirm the same saved profile appears. Its email must come from GitHub and remain read-only.

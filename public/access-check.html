@@ -24,7 +24,7 @@
       button:hover:not(:disabled) { background: #143d2e; }
       a { color: #225c46; text-underline-offset: 3px; }
       a:focus-visible, button:focus-visible { outline: 3px solid #84a98c; outline-offset: 4px; }
-      #message { min-height: 28px; margin-top: 22px; }
+      #message { min-height: 28px; margin-top: 22px; padding: 14px 16px; background: #eef4ee; border: 1px solid #d5e2d5; border-radius: 7px; }
       #account { color: #617267; }
       table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 15px; }
       th, td { text-align: left; padding: 14px 8px; border-bottom: 1px solid #e4e9e3; vertical-align: top; }
@@ -46,9 +46,11 @@
         <h1 id="heading">Deployment verification</h1>
         <p>Use the second research account to check that the server rejects actions outside its permissions.</p>
         <p class="muted">Open this page in the same tab where you signed in. These checks do not change account access, discoveries, or discussions. Your session stays in this browser and is sent only to the SciDA API.</p>
-        <button id="run" type="button">Run access checks</button>
         <p id="account"></p>
-        <p id="message" role="status" aria-live="polite">Ready when you are. Each check should return HTTP 403 (access denied).</p>
+        <p id="message" role="status" aria-live="polite">Starting the permission checks…</p>
+        <p id="script-help" class="muted">If this message does not change, open this page in your web browser from your signed-in SciDA profile. The button stays disabled until the checks are ready.</p>
+        <noscript><p class="fail">JavaScript is turned off. These checks need JavaScript in the browser where you signed in to SciDA.</p></noscript>
+        <button id="run" type="button" disabled>Preparing access checks…</button>
         <table id="results" hidden>
           <caption class="muted">Server permission checks</caption>
           <thead><tr><th scope="col">Action</th><th scope="col">Result</th></tr></thead>
@@ -75,8 +77,11 @@
         const account = document.getElementById('account');
         const table = document.getElementById('results');
         const cells = ['access-result', 'discovery-result', 'discussion-result'].map(id => document.getElementById(id));
+        let checking = false;
 
-        button.addEventListener('click', async () => {
+        async function runChecks() {
+          if (checking) return;
+          checking = true;
           button.disabled = true;
           button.textContent = 'Checking access…';
           message.textContent = 'Checking your signed-in account…';
@@ -93,19 +98,32 @@
               message.textContent = 'Sign in to SciDA with the second account, then open this page in that same tab.';
               return;
             }
-            const request = (path, body) => fetch(api + path, {
-              method: body ? 'POST' : 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
-              signal: AbortSignal.timeout(30000),
-              headers: { Authorization: 'Bearer ' + session.token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-              ...(body ? { body: JSON.stringify(body) } : {}),
-            });
+            const request = async (path, body) => {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 30000);
+              try {
+                const response = await fetch(api + path, {
+                  method: body ? 'POST' : 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
+                  signal: controller.signal,
+                  headers: { Authorization: 'Bearer ' + session.token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+                  ...(body ? { body: JSON.stringify(body) } : {}),
+                });
+                let payload;
+                if (path === '/v1/portal' && response.ok) payload = await response.json();
+                else await response.body?.cancel();
+                return { status: response.status, ok: response.ok, payload };
+              } finally {
+                clearTimeout(timeout);
+              }
+            };
             const portal = await request('/v1/portal');
             if (!portal.ok) {
-              await portal.body?.cancel();
               message.textContent = portal.status === 401 ? 'Your session has expired. Sign in again, then return in the same tab.' : 'The SciDA API is temporarily unavailable. Try the checks again shortly.';
               return;
             }
-            const { user, state } = await portal.json();
+            const { user, state } = portal.payload;
+            if (user && ['Reader', 'Reviewer', 'Approver', 'Admin'].includes(user.role))
+              account.textContent = 'Current account: ' + user.role;
             if (!user || !['Reader', 'Reviewer'].includes(user.role)) {
               message.textContent = 'Use the second account with Reader or Reviewer access. These checks are not intended for the Admin account.';
               return;
@@ -116,7 +134,6 @@
               message.textContent = 'Use an account without Astronomy reviewer approval so that the topic restriction can be checked.';
               return;
             }
-            account.textContent = user.role === 'Reader' ? 'Current account: Reader' : 'Current account: Reviewer';
             // These requests cannot write even if a role check were missing:
             // the target ID exceeds the safe-integer IDs accepted by sign-in;
             // the discovery has no revision; the reply parent cannot be a UUID.
@@ -140,16 +157,20 @@
               cells[index].textContent = passed ? 'Passed · HTTP 403' : 'Unexpected · HTTP ' + result.status;
               cells[index].className = passed ? 'pass' : 'fail';
               allPassed = allPassed && passed;
-              await result.body?.cancel();
             }
             message.textContent = allPassed ? 'All three checks passed. The server rejected every restricted action with HTTP 403.' : 'A check returned an unexpected result. Share the result labels and HTTP codes so the deployment can be checked.';
           } catch {
             message.textContent = 'The checks could not complete. Confirm you are signed in on the live SciDA website, then try again. No credentials are displayed.';
           } finally {
+            checking = false;
             button.disabled = false;
             button.textContent = 'Run access checks again';
           }
-        });
+        }
+        button.addEventListener('click', () => { void runChecks(); });
+        document.getElementById('script-help').hidden = true;
+        button.disabled = false;
+        void runChecks();
       })();
     </script>
   </body>
