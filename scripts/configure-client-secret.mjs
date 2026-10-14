@@ -18,12 +18,20 @@ async function main() {
     if (secret.length > 4096) fail('The supplied value is too long for a client secret.');
   }
   secret = secret.trim();
-  if (secret.length < 20 || /\s/.test(secret) || secret.includes('PRIVATE KEY'))
-    fail('Paste only the generated client secret value, without a label or private key.');
   const config = await readFile(configPath, 'utf8');
   const clientId = config.match(/"GITHUB_CLIENT_ID"\s*:\s*"([^"]+)"/)?.[1];
   // Public identifier verified against the organization's App registration.
   if (clientId !== 'Iv23liWvIlvAJaPfQb6f') fail('The Worker Client ID differs from the verified SciDA App. Recheck the registration before changing secrets.');
+  if (secret === clientId)
+    fail('This is the App public Client ID, not its client secret. Paste the newly generated client secret VALUE. Nothing was uploaded.');
+  if (/^https?:\/\//i.test(secret))
+    fail('This is a URL, not a client secret. Paste the newly generated client secret VALUE. Nothing was uploaded.');
+  if (secret.includes('PRIVATE KEY'))
+    fail('This is a private key, not a client secret. Use Credentials > Client secrets, not Key pairs. Nothing was uploaded.');
+  if (/^(?:[A-Za-z]:[\\/]|\\\\|~[\\/]|\/(?:Users|home|tmp|mnt)\/)/i.test(secret) || /\.pem$/i.test(secret))
+    fail('This is a file path, not a client secret. Paste the newly generated client secret VALUE. Nothing was uploaded.');
+  if (secret.length < 20 || /\s/.test(secret))
+    fail('Paste only the complete generated client secret VALUE, without its label, App ID, masked display, or surrounding instructions. Nothing was uploaded.');
   const headers = {
     Accept: 'application/vnd.github+json', 'User-Agent': 'SciDA-Client-Secret-Setup',
     'X-GitHub-Api-Version': '2022-11-28',

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://scida-api.scida-website.workers.dev; img-src 'self'; base-uri 'none'; form-action 'none'" />
+    <title>SciDA · Access verification</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <style>
+      :root { color-scheme: light; font-family: Inter, "Segoe UI", system-ui, sans-serif; color: #24372f; background: #f5f7f3; line-height: 1.65; }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      main { max-width: 780px; margin: 60px auto; padding: 0 24px; }
+      .brand { display: inline-block; color: #1c4c3b; font-size: 28px; font-weight: 700; text-decoration: none; }
+      .description { margin: 0 0 32px; color: #617267; font-size: 14px; }
+      .panel { background: #fff; border: 1px solid #dfe6df; border-radius: 14px; padding: 36px; }
+      h1 { margin: 0 0 16px; font: 600 clamp(26px, 4vw, 34px)/1.2 Georgia, serif; }
+      p { margin: 12px 0; }
+      .muted { color: #617267; }
+      button { font: inherit; font-weight: 600; color: #fff; background: #1c4c3b; border: 1px solid #1c4c3b; border-radius: 7px; padding: 11px 20px; margin-top: 16px; cursor: pointer; }
+      button:disabled { opacity: .65; cursor: wait; }
+      button:hover:not(:disabled) { background: #143d2e; }
+      a { color: #225c46; text-underline-offset: 3px; }
+      a:focus-visible, button:focus-visible { outline: 3px solid #84a98c; outline-offset: 4px; }
+      #message { min-height: 28px; margin-top: 22px; }
+      #account { color: #617267; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 15px; }
+      th, td { text-align: left; padding: 14px 8px; border-bottom: 1px solid #e4e9e3; vertical-align: top; }
+      th { font-weight: 600; }
+      td:last-child { white-space: nowrap; }
+      .pass { color: #1c6345; font-weight: 600; }
+      .fail { color: #8a3b2c; font-weight: 600; }
+      nav { display: flex; flex-wrap: wrap; gap: 14px 24px; margin-top: 24px; }
+      footer { color: #617267; font-size: 13px; margin-top: 22px; }
+      [hidden] { display: none !important; }
+      @media (max-width: 540px) { main { margin: 28px auto; padding: 0 16px; } .panel { padding: 24px 18px; } th, td { padding: 12px 4px; font-size: 14px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="brand" href="./#/">SciDA</a>
+      <p class="description">Scientific Discovery Agent</p>
+      <section class="panel" aria-labelledby="heading">
+        <h1 id="heading">Deployment verification</h1>
+        <p>Use the second research account to check that the server rejects actions outside its permissions.</p>
+        <p class="muted">Open this page in the same tab where you signed in. These checks do not change account access, discoveries, or discussions. Your session stays in this browser and is sent only to the SciDA API.</p>
+        <button id="run" type="button">Run access checks</button>
+        <p id="account"></p>
+        <p id="message" role="status" aria-live="polite">Ready when you are. Each check should return HTTP 403 (access denied).</p>
+        <table id="results" hidden>
+          <caption class="muted">Server permission checks</caption>
+          <thead><tr><th scope="col">Action</th><th scope="col">Result</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Manage account access</th><td id="access-result">Waiting</td></tr>
+            <tr><th scope="row">Edit a discovery</th><td id="discovery-result">Waiting</td></tr>
+            <tr><th scope="row">Discuss an unapproved Astronomy topic</th><td id="discussion-result">Waiting</td></tr>
+          </tbody>
+        </table>
+        <nav aria-label="Return to SciDA">
+          <a href="./#/profile">Return to profile</a>
+          <a href="./#/access">Reviewer access</a>
+        </nav>
+      </section>
+      <footer>This temporary verification page displays only the account role and HTTP results. It does not display or save credentials.</footer>
+    </main>
+    <script>
+      (() => {
+        'use strict';
+        const website = 'https://scida-science.github.io';
+        const api = 'https://scida-api.scida-website.workers.dev';
+        const button = document.getElementById('run');
+        const message = document.getElementById('message');
+        const account = document.getElementById('account');
+        const table = document.getElementById('results');
+        const cells = ['access-result', 'discovery-result', 'discussion-result'].map(id => document.getElementById(id));
+
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          button.textContent = 'Checking access…';
+          message.textContent = 'Checking your signed-in account…';
+          account.textContent = '';
+          table.hidden = true;
+          cells.forEach(cell => { cell.textContent = 'Waiting'; cell.className = ''; });
+          try {
+            if (location.origin !== website) {
+              message.textContent = 'Open this verification page on the live SciDA website.';
+              return;
+            }
+            const session = JSON.parse(sessionStorage.getItem('scida.session.v1') || 'null');
+            if (!session || typeof session.token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.token) || !(Date.parse(session.expiresAt) > Date.now())) {
+              message.textContent = 'Sign in to SciDA with the second account, then open this page in that same tab.';
+              return;
+            }
+            const request = (path, body) => fetch(api + path, {
+              method: body ? 'POST' : 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
+              signal: AbortSignal.timeout(30000),
+              headers: { Authorization: 'Bearer ' + session.token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+              ...(body ? { body: JSON.stringify(body) } : {}),
+            });
+            const portal = await request('/v1/portal');
+            if (!portal.ok) {
+              await portal.body?.cancel();
+              message.textContent = portal.status === 401 ? 'Your session has expired. Sign in again, then return in the same tab.' : 'The SciDA API is temporarily unavailable. Try the checks again shortly.';
+              return;
+            }
+            const { user, state } = await portal.json();
+            if (!user || !['Reader', 'Reviewer'].includes(user.role)) {
+              message.textContent = 'Use the second account with Reader or Reviewer access. These checks are not intended for the Admin account.';
+              return;
+            }
+            if (!Array.isArray(user.approvedTopics) || !Array.isArray(state?.discoveries)) throw new Error();
+            const outside = state.discoveries.find(discovery => discovery.field === 'Astronomy' && !user.approvedTopics.includes(discovery.topic));
+            if (!outside) {
+              message.textContent = 'Use an account without Astronomy reviewer approval so that the topic restriction can be checked.';
+              return;
+            }
+            account.textContent = user.role === 'Reader' ? 'Current account: Reader' : 'Current account: Reviewer';
+            // These requests cannot write even if a role check were missing:
+            // the target ID exceeds the safe-integer IDs accepted by sign-in;
+            // the discovery has no revision; the reply parent cannot be a UUID.
+            const probes = [
+              ['/v1/access/99999999999999999999', { role: 'Reader', approvedTopics: [], assignedTopics: [] }],
+              ['/v1/discoveries/AI-001', { discovery: { id: 'AI-001' } }],
+              ['/v1/comments', { input: {
+                discoveryId: outside.id, version: outside.version,
+                parentId: 'SCIDA-NONEXISTENT-PERMISSION-CHECK', reference: 'Deployment verification',
+                body: 'Deployment permission check: this request must be rejected; no scientific claim.',
+              } }],
+            ];
+            table.hidden = false;
+            let allPassed = true;
+            for (let index = 0; index < probes.length; index++) {
+              message.textContent = 'Running permission check ' + (index + 1) + ' of 3…';
+              cells[index].textContent = 'Checking…';
+              const [path, body] = probes[index];
+              const result = await request(path, body);
+              const passed = result.status === 403;
+              cells[index].textContent = passed ? 'Passed · HTTP 403' : 'Unexpected · HTTP ' + result.status;
+              cells[index].className = passed ? 'pass' : 'fail';
+              allPassed = allPassed && passed;
+              await result.body?.cancel();
+            }
+            message.textContent = allPassed ? 'All three checks passed. The server rejected every restricted action with HTTP 403.' : 'A check returned an unexpected result. Share the result labels and HTTP codes so the deployment can be checked.';
+          } catch {
+            message.textContent = 'The checks could not complete. Confirm you are signed in on the live SciDA website, then try again. No credentials are displayed.';
+          } finally {
+            button.disabled = false;
+            button.textContent = 'Run access checks again';
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
