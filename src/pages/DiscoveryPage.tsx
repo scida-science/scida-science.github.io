@@ -18,6 +18,7 @@ import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
 import EvidenceFigure from "../components/EvidenceFigure";
+import FollowDiscovery from "../components/FollowDiscovery";
 import ReviewerPackage from "../components/ReviewerPackage";
 import type { ActionResult, Discovery } from "../types";
 
@@ -299,6 +300,7 @@ export default function DiscoveryPage() {
         <div className="discovery-meta">
           <span>Manuscript {discovery.version}</span>
           <span>Updated {formatDate(discovery.updatedAt)}</span>
+          <FollowDiscovery key={user?.id ?? "visitor"} discovery={discovery} />
           {user?.role === "Admin" && (
             <button
               className="btn btn-secondary btn-small"

@@ -1,0 +1,82 @@
+.account-menu {
+  position: relative;
+  min-width: 0;
+}
+.account-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #41503f;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.account-menu-trigger:hover,
+.account-menu-trigger[aria-expanded="true"] {
+  background: #f1f5ec;
+  border-color: #dfe6d8;
+}
+.account-menu-identity {
+  display: block;
+  max-width: 225px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.account-menu-identity > span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.account-menu-identity small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.account-menu-trigger > svg { flex-shrink: 0; }
+.account-menu-panel {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 235px;
+  max-width: calc(100vw - 40px);
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 10px 30px #2037201a;
+}
+.account-menu-panel a,
+.account-menu-panel button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #41503f;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.account-menu-panel a:hover,
+.account-menu-panel button:hover { background: #f1f5ec; }
+.account-menu-panel button {
+  border-top: 1px solid #e8ece2;
+  border-radius: 0 0 4px 4px;
+  margin-top: 4px;
+}
+.account-menu-panel button:disabled { cursor: wait; opacity: 0.65; }
+@media (max-width: 560px) {
+  .account-menu-trigger { gap: 5px; padding: 4px; }
+  .account-menu-identity { max-width: 132px; font-size: 12px; }
+}

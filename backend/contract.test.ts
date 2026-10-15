@@ -156,6 +156,30 @@ it("persists profile edits across independent clients and never exposes private 
   });
   expect((await (await repository(null)).read()).state.profiles).toEqual([]);
 });
+it("requires a session to follow and derives preference ownership from it, never request fields", async () => {
+  const follow = (userId: string | null, input: unknown) => handleRequest(
+    new Request(env.API_ORIGIN + "/v1/discoveries/AI-001/follow", {
+      method: "POST",
+      headers: {
+        Origin: env.FRONTEND_ORIGIN,
+        "Content-Type": "application/json",
+        ...(userId ? { Authorization: "Bearer " + String(ids.indexOf(userId) + 1).repeat(43) } : {}),
+      },
+      body: JSON.stringify(input),
+    }), env, store,
+  );
+  expect((await follow(null, { following: true, userId: "200" })).status).toBe(401);
+  expect(state.profiles["200"].followedDiscoveryIds).toBeUndefined();
+  expect((await follow("200", { following: true, userId: "300", profileId: "300", role: "Admin" })).status).toBe(200);
+  expect(state.profiles["200"].followedDiscoveryIds).toEqual(["AI-001"]);
+  expect(state.profiles["300"].followedDiscoveryIds).toBeUndefined();
+  expect(state.access["200"].role).toBe("Reader");
+  expect((await (await repository("200")).read()).user?.followedDiscoveryIds).toEqual(["AI-001"]);
+  expect((await (await repository("300")).read()).user?.followedDiscoveryIds).toEqual([]);
+  expect((await follow("200", { following: "false" })).status).toBe(400);
+  expect((await follow("200", { following: false, userId: "300" })).status).toBe(200);
+  expect((await (await repository("200")).read()).user?.followedDiscoveryIds).toEqual([]);
+});
 it("applies, approves within scope, and persists versioned threads through the real HTTP contract", async () => {
   const owner = await repository(env.ADMIN_GITHUB_ID),
     reader = await repository("200"),

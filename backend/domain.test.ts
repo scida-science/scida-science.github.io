@@ -140,6 +140,73 @@ beforeEach(() => {
   domain = createDomain(store, OWNER, "https://api.example.test");
 });
 
+describe("private discovery following", () => {
+  it("persists idempotent follow and unfollow preferences across a fresh domain instance", async () => {
+    await domain.setFollowing(READER, "AI-001", true);
+    await domain.setFollowing(READER, "AI-001", true);
+    expect(store.state.profiles[READER].followedDiscoveryIds).toEqual(["AI-001"]);
+    const reloaded = createDomain(store, OWNER, "https://api.example.test");
+    const result = await reloaded.portal(READER);
+    expect(result.user?.followedDiscoveryIds).toEqual(["AI-001"]);
+    expect(result.state.profiles.find((item) => item.id === READER)?.followedDiscoveryIds).toEqual(["AI-001"]);
+    await reloaded.setFollowing(READER, "AI-001", false);
+    await reloaded.setFollowing(READER, "AI-001", false);
+    expect((await domain.portal(READER)).user?.followedDiscoveryIds).toEqual([]);
+  });
+  it("keeps follows private to each account, including when an administrator lists profiles", async () => {
+    await domain.setFollowing(READER, "AI-001", true);
+    await domain.setFollowing(OTHER, "AST-001", true);
+    expect((await domain.portal(OTHER)).user?.followedDiscoveryIds).toEqual(["AST-001"]);
+    const ownerPortal = await domain.portal(OWNER);
+    expect(ownerPortal.user?.followedDiscoveryIds).toEqual([]);
+    expect(ownerPortal.state.profiles.find((item) => item.id === READER)).not.toHaveProperty("followedDiscoveryIds");
+    expect(ownerPortal.state.profiles.find((item) => item.id === OTHER)).not.toHaveProperty("followedDiscoveryIds");
+    expect((await domain.portal(null)).state.profiles).toEqual([]);
+  });
+  it("handles legacy accounts and hides stale, malformed, or duplicate stored follows", async () => {
+    expect((await domain.portal(READER)).user?.followedDiscoveryIds).toEqual([]);
+    store.state.profiles[READER].followedDiscoveryIds = ["AI-001", "AI-001", "REMOVED-001", "../private"];
+    expect((await domain.portal(READER)).user?.followedDiscoveryIds).toEqual(["AI-001"]);
+    store.records = store.records.filter((record) => record.document.discovery.id !== "AI-001");
+    expect((await domain.portal(READER)).user?.followedDiscoveryIds).toEqual([]);
+    await domain.setFollowing(READER, "REMOVED-001", false);
+    await domain.setFollowing(READER, "AI-001", false);
+    expect(store.state.profiles[READER].followedDiscoveryIds).toEqual([]);
+  });
+  it("requires an existing discovery to follow and validates the boolean and discovery ID", async () => {
+    await denied(domain.setFollowing(READER, "MISSING-001", true), 404);
+    await denied(domain.setFollowing(READER, "AI-001", "true"), 400);
+    await denied(domain.setFollowing(READER, "../private", false), 400);
+    await denied(domain.setFollowing("99999", "AI-001", true), 401);
+    expect(store.mutations).toBe(0);
+  });
+  it("preserves saved follows when editing a profile and ignores injected profile preferences", async () => {
+    await domain.setFollowing(READER, "AI-001", true);
+    await domain.saveProfile(READER, { ...profile("Edited"), followedDiscoveryIds: ["AST-001"] });
+    expect(store.state.profiles[READER].profile).not.toHaveProperty("followedDiscoveryIds");
+    expect((await domain.portal(READER)).user?.followedDiscoveryIds).toEqual(["AI-001"]);
+    Object.assign(store.state.profiles[READER].profile, { followedDiscoveryIds: ["AST-001"] });
+    expect((await domain.portal(READER)).user?.followedDiscoveryIds).toEqual(["AI-001"]);
+    expect((await domain.portal(OWNER)).state.profiles.find((item) => item.id === READER)).not.toHaveProperty("followedDiscoveryIds");
+  });
+  it("merges simultaneous preference updates using the latest persisted state", async () => {
+    store.conflict = (state) => {
+      state.profiles[READER].followedDiscoveryIds = ["AST-001"];
+    };
+    await domain.setFollowing(READER, "AI-001", true);
+    expect(store.state.profiles[READER].followedDiscoveryIds).toEqual(["AST-001", "AI-001"]);
+  });
+  it("does not grant discussion or analysis-package access to a Reader", async () => {
+    const access = copy(store.state.access);
+    store.records[0].document.materials.repository = { path: "reviewer/package.json", access: "reviewer", format: "multipart-zip" };
+    await domain.setFollowing(READER, "AI-001", true);
+    expect(store.state.access).toEqual(access);
+    expect((await domain.portal(READER)).user?.role).toBe("Reader");
+    await denied(domain.addComment(READER, comment()));
+    await denied(domain.authorizeMaterial(READER, "AI-001", "repository"), 404);
+  });
+});
+
 describe("server identity, profiles, and privacy", () => {
   it("starts with no seeded identities, sessions, comments, or approval decisions", () => {
     expect(emptyAdminState()).toEqual({

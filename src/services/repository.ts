@@ -65,6 +65,8 @@ export function createPortalRepository(client: ApiClient) {
     },
     saveProfile: (input: ProfileInput) =>
       client.request<void>("/v1/profile", { input }),
+    setFollowing: (discoveryId: string, following: boolean) =>
+      client.request<void>(`/v1/discoveries/${encodeURIComponent(discoveryId)}/follow`, { following }),
     applyForReview: (topics: TopicId[], evidence: string) =>
       client.request<void>("/v1/applications", { topics, evidence }),
     reviewApplication: (

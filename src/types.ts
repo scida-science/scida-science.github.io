@@ -69,6 +69,8 @@ export interface Profile {
   role: Role;
   approvedTopics: TopicId[];
   assignedTopics: TopicId[];
+  /** Private preference, returned only for the signed-in account. */
+  followedDiscoveryIds?: string[];
 }
 export interface DiscussionComment {
   id: string;
@@ -135,7 +137,7 @@ export interface ReviewerPackage {
 }
 export type ProfileInput = Omit<
   Profile,
-  "id" | "githubLogin" | "email" | "role" | "approvedTopics" | "assignedTopics"
+  "id" | "githubLogin" | "email" | "role" | "approvedTopics" | "assignedTopics" | "followedDiscoveryIds"
 >;
 export interface CommentInput {
   discoveryId: string;

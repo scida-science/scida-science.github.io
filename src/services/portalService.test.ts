@@ -109,6 +109,40 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("Persisted discovery following", () => {
+  it("saves the explicit follow state and refreshes it from shared storage", async () => {
+    const { service, routes, setProfile } = setup();
+    const discoveryId = discoveries[0].id;
+    const writes: unknown[] = [];
+    routes.set(`/v1/discoveries/${discoveryId}/follow`, (init) => {
+      const body = JSON.parse(init.body as string);
+      writes.push(body);
+      setProfile({ ...profile(), followedDiscoveryIds: body.following ? [discoveryId] : [] });
+      return json({ ok: true });
+    });
+    await service.start();
+    expect((await service.actions.setFollowing(discoveryId, true)).ok).toBe(true);
+    expect(service.getSnapshot().user?.followedDiscoveryIds).toEqual([discoveryId]);
+    await service.actions.refresh();
+    expect(service.getSnapshot().user?.followedDiscoveryIds).toEqual([discoveryId]);
+    expect((await service.actions.setFollowing(discoveryId, false)).ok).toBe(true);
+    expect(service.getSnapshot().user?.followedDiscoveryIds).toEqual([]);
+    expect(writes).toEqual([{ following: true }, { following: false }]);
+  });
+  it("requires a session and does not claim failed follow writes succeeded", async () => {
+    const visitor = setup({ signedIn: false });
+    await visitor.service.start();
+    expect((await visitor.service.actions.setFollowing(discoveries[0].id, true)).ok).toBe(false);
+    expect(visitor.fetcher.mock.calls.some(([url]) => String(url).endsWith("/follow"))).toBe(false);
+    const signedIn = setup();
+    signedIn.routes.set(`/v1/discoveries/${discoveries[0].id}/follow`, () => json({ message: "Storage unavailable" }, 503));
+    await signedIn.service.start();
+    const result = await signedIn.service.actions.setFollowing(discoveries[0].id, true);
+    expect(result.ok).toBe(false);
+    expect(signedIn.service.getSnapshot().user?.followedDiscoveryIds ?? []).toEqual([]);
+  });
+});
+
 describe("API configuration and sessions", () => {
   it("permits HTTPS and loopback API URLs without credential configuration", () => {
     expect(parseApiConfiguration("https://api.scida.example/").url).toBe(
@@ -321,7 +355,7 @@ describe("GitHub OAuth with PKCE", () => {
       false,
     );
     expect(sessionStorage.getItem(OAUTH_KEY)).toBeNull();
-    expect(window.location.hash).toBe("#/profile");
+    expect(window.location.hash).toBe("#/");
     expect(service.getSnapshot().user?.role).toBe("Reader");
   });
   it("rejects mismatched OAuth state without making an exchange request", async () => {
@@ -542,6 +576,7 @@ describe("shared writes and authorized materials", () => {
       ...profile("Admin"),
       fullName: "  Edited name  ",
       approvedTopics: ["bandit-theory"],
+      followedDiscoveryIds: ["AI-001"],
     };
     expect(
       (await service.actions.saveProfile(injected as ProfileInput)).ok,
@@ -559,6 +594,7 @@ describe("shared writes and authorized materials", () => {
       "email",
       "approvedTopics",
       "assignedTopics",
+      "followedDiscoveryIds",
     ])
       expect(body.input).not.toHaveProperty(key);
   });

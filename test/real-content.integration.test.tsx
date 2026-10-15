@@ -63,7 +63,7 @@ describe.skipIf(!sourceRoot)("prepared astronomy content in the website", () => 
     portal = {
       state: { discoveries: prepared.map(({ document }) => publicDiscovery(document)), profiles: [], comments: [], codeRequests: [], applications: [], invitations: [] },
       user: null, configured: true, loading: false, error: null,
-      signInWithGitHub: success(), signOut: success(), refresh: success(), saveProfile: success(),
+      signInWithGitHub: success(), signOut: success(), refresh: success(), setFollowing: success(), saveProfile: success(),
       applyForReview: success(), reviewApplication: success(), createInvitation: success(), previewInvitation: success(),
       confirmInvitation: success(), addComment: success(), requestCode: success(), updateDiscovery: success(), setAccess: success(),
       downloadMaterial: success(), downloadPackageFile: success(),

@@ -7,9 +7,10 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { ArrowRight, LogOut, RefreshCw } from "lucide-react";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import { usePortal } from "./state/PortalContext";
 import { Brand } from "./components/Ui";
+import AccountMenu from "./components/AccountMenu";
 import HomePage from "./pages/HomePage";
 import DiscoveryPage from "./pages/DiscoveryPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -21,7 +22,7 @@ function RouteFocus() {
   useEffect(() => {
     window.scrollTo(0, 0);
     document.getElementById("main-content")?.focus();
-    document.title = `${pathname.startsWith("/discoveries/") ? "Discovery" : pathname === "/profile" ? "Research profile" : pathname === "/access" ? "Reviewer access" : pathname === "/login" ? "Account" : "Discoveries"} · SciDA`;
+    document.title = `${pathname.startsWith("/discoveries/") ? "Discovery" : pathname === "/profile" ? "Research profile" : pathname === "/access" ? "Reviewer access" : pathname === "/login" ? "Account" : pathname === "/following" ? "Following" : "Explore"} · SciDA`;
   }, [pathname]);
   return null;
 }
@@ -49,10 +50,9 @@ export default function App() {
           </Link>
           <nav className="primary-nav" aria-label="Main navigation">
             <NavLink end to="/">
-              Discoveries
+              Explore
             </NavLink>
-            {user && <NavLink to="/profile">My profile</NavLink>}
-            <NavLink to="/access">Reviewer access</NavLink>
+            <NavLink to="/following">Following</NavLink>
           </nav>
           <div className="account-controls">
             {configured && (
@@ -67,26 +67,20 @@ export default function App() {
               </button>
             )}
             {user ? (
-              <>
-                <Link className="account-name" to="/profile">
-                  {user.fullName || "My account"}
-                  <small>{user.role}</small>
-                </Link>
-                <button
-                  className="icon-button"
-                  aria-label="Sign out"
-                  title="Sign out"
-                  disabled={signingOut}
-                  onClick={async () => {
+              <AccountMenu user={user} signingOut={signingOut}
+                  onSignOut={async () => {
                     setSigningOut(true);
-                    const result = await signOut();
-                    setAccountError(result.ok ? "" : result.message);
-                    setSigningOut(false);
+                    setAccountError("");
+                    try {
+                      const result = await signOut();
+                      setAccountError(result.ok ? "" : result.message);
+                    } catch {
+                      setAccountError("Sign-out could not be completed. Please try again.");
+                    } finally {
+                      setSigningOut(false);
+                    }
                   }}
-                >
-                  <LogOut size={18} />
-                </button>
-              </>
+              />
             ) : (
               <Link className="btn btn-secondary btn-small" to="/login">
                 Sign in
@@ -125,6 +119,7 @@ export default function App() {
         <RouteFocus />
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/following" element={<HomePage followingOnly />} />
           <Route
             path="/discoveries/:id"
             element={<DiscoveryPage key={user?.id ?? "visitor"} />}
@@ -147,7 +142,7 @@ export default function App() {
           />
           <Route
             path="/login"
-            element={user ? <Navigate replace to="/profile" /> : <AuthPage />}
+            element={user ? <Navigate replace to="/" /> : <AuthPage />}
           />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route

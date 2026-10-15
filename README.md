@@ -6,6 +6,8 @@ This release integrates three real astronomy investigations, all **Awaiting Vali
 
 Earlier deployment documentation records successful owner/Reader sign-in on 14 October 2026. Those are historical checks, not a fresh verification of reviewer posting or large-package downloads. See [verification and remaining work](#verification-and-remaining-work).
 
+Sign-in opens **Explore**. **Following** lists the discoveries saved with the Follow button on a research card or investigation page, ordered by their latest update. Profile, reviewer access and sign-out are available from the account-name menu. Follows are private account preferences persisted in the administrative GitHub repository, separate from editable profile fields; following does not grant review or material access. Existing accounts need no migration.
+
 ## Repository map
 
 | Location | Purpose |

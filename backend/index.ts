@@ -208,6 +208,13 @@ export async function handleRequest(
             input.explanation,
           );
         else if (
+          parts.length === 4 &&
+          parts[0] === "v1" &&
+          parts[1] === "discoveries" &&
+          parts[3] === "follow"
+        )
+          await domain.setFollowing(userId, parts[2], input.following);
+        else if (
           parts.length === 3 &&
           parts[0] === "v1" &&
           parts[1] === "discoveries"

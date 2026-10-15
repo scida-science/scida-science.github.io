@@ -98,7 +98,7 @@ export function createGitHubAuth(
           { anonymous: true },
         );
         client.setSession(session);
-        url.hash = "/profile";
+        url.hash = "/";
         replace(url);
         return true;
       } catch (error) {

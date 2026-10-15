@@ -22,6 +22,8 @@ export interface ProfileRecord {
   profile: ProfileInput;
   githubLogin: string;
   email: string;
+  /** Server-managed preference, separate from client-editable profile fields. */
+  followedDiscoveryIds?: string[];
 }
 export interface AccessRecord {
   role: Exclude<Role, "Admin">;

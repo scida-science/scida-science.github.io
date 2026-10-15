@@ -47,6 +47,12 @@ const owns = (record: object, key: string) =>
 const sameTopics = (a: TopicId[], b: TopicId[]) =>
   a.length === b.length && a.every((topic) => b.includes(topic));
 const clone = <T>(value: T): T => structuredClone(value);
+const followedIds = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? [...new Set(value.filter((item): item is string =>
+        typeof item === "string" && /^[A-Z0-9][A-Za-z0-9_-]{1,79}$/.test(item),
+      ))]
+    : [];
 function topics(value: unknown, required = false): TopicId[] {
   if (!validTopics(value, required))
     bad("Choose recognized, distinct research topics.");
@@ -133,7 +139,7 @@ export function createDomain(
         : access && ["Reviewer", "Approver", "Senior Approver"].includes(access.role)
           ? access.role
           : "Reader";
-    return {
+    const result: Profile = {
       ...clone(record.profile),
       id: userId,
       githubLogin: record.githubLogin,
@@ -148,6 +154,10 @@ export function createDomain(
           ? [...access.assignedTopics]
           : [],
     };
+    // Only the private ProfileRecord preference is authoritative. Never expose
+    // a similarly named field supplied through a legacy profile record.
+    delete result.followedDiscoveryIds;
+    return result;
   }
   function user(state: AdminState, userId: string | null): Profile {
     const current = getUser(state, userId);
@@ -262,6 +272,11 @@ export function createDomain(
       const readable = all.filter((record) =>
         canView(current, record.document),
       );
+      if (current) {
+        const visibleIds = new Set(readable.map((record) => record.document.discovery.id));
+        current.followedDiscoveryIds = followedIds(admin.profiles[current.id].followedDiscoveryIds)
+          .filter((discoveryId) => visibleIds.has(discoveryId));
+      }
       const state: PortalState = {
         profiles: [],
         discoveries: [],
@@ -371,6 +386,9 @@ export function createDomain(
             return {
               ...profile,
               email: profileId === current.id ? profile.email : "",
+              ...(profileId === current.id
+                ? { followedDiscoveryIds: [...(current.followedDiscoveryIds ?? [])] }
+                : {}),
             };
           });
         state.codeRequests = admin.codeRequests
@@ -392,6 +410,25 @@ export function createDomain(
       await store.updateAdmin((state) => {
         user(state, userId);
         state.profiles[userId].profile = clone(profile);
+      });
+    },
+    async setFollowing(
+      userId: string,
+      discoveryId: unknown,
+      following: unknown,
+    ): Promise<void> {
+      if (!string(discoveryId, 80, 2) || !/^[A-Z0-9][A-Za-z0-9_-]{1,79}$/.test(discoveryId))
+        bad("A valid discovery ID is required.");
+      if (typeof following !== "boolean") bad("Choose whether to follow this discovery.");
+      // Removing a saved preference remains possible after a discovery is removed.
+      const record = following ? await discovery(discoveryId) : null;
+      await store.updateAdmin((state) => {
+        const current = user(state, userId);
+        if (record) visible(current, record);
+        const saved = followedIds(state.profiles[current.id].followedDiscoveryIds);
+        state.profiles[current.id].followedDiscoveryIds = following
+          ? [...new Set([...saved, discoveryId as string])]
+          : saved.filter((savedId) => savedId !== discoveryId);
       });
     },
     async applyForReview(

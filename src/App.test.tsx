@@ -74,6 +74,7 @@ beforeEach(() => {
     requestCode: success(),
     updateDiscovery: success(),
     setAccess: success(),
+    setFollowing: success(),
   };
   vi.stubGlobal("scrollTo", vi.fn());
   vi.stubGlobal(
@@ -93,6 +94,76 @@ afterEach(() => {
 });
 
 describe("Public research and real account interface", () => {
+  it("keeps Explore and Following as the primary navigation for visitors and researchers", () => {
+    const view = openApp();
+    const navigation = screen.getByRole("navigation", { name: "Main navigation" });
+    expect(within(navigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Explore", "Following"]);
+    expect(within(navigation).getByRole("link", { name: "Explore" }).getAttribute("href")).toBe("/");
+    expect(within(navigation).getByRole("link", { name: "Following" }).getAttribute("href")).toBe("/following");
+    expect(screen.queryByRole("button", { name: /Account menu/ })).toBeNull();
+    view.unmount();
+    signedIn();
+    openApp();
+    expect(within(screen.getByRole("navigation", { name: "Main navigation" })).getAllByRole("link")).toHaveLength(2);
+    const trigger = screen.getByRole("button", { name: "Account menu for Test Researcher" });
+    expect(trigger.textContent).toContain("Test Researcher");
+    expect(trigger.textContent).toContain("Reader");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("link", { name: "My profile" })).toBeNull();
+  });
+
+  it("opens the account dropdown by keyboard, closes on Escape, and restores trigger focus", async () => {
+    signedIn();
+    const interaction = userEvent.setup();
+    openApp();
+    const trigger = screen.getByRole("button", { name: "Account menu for Test Researcher" });
+    trigger.focus();
+    await interaction.keyboard("{ArrowDown}");
+    const menu = screen.getByRole("navigation", { name: "Account" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(within(menu).getByRole("link", { name: "My profile" }));
+    await interaction.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(within(menu).getByRole("link", { name: "Reviewer access" }));
+    await interaction.keyboard("{End}");
+    expect(document.activeElement).toBe(within(menu).getByRole("button", { name: "Sign out" }));
+    await interaction.keyboard("{Escape}");
+    expect(screen.queryByRole("navigation", { name: "Account" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes the account dropdown on outside interaction, keyboard exit, and navigation", async () => {
+    signedIn();
+    const interaction = userEvent.setup();
+    openApp();
+    const trigger = screen.getByRole("button", { name: "Account menu for Test Researcher" });
+    await interaction.click(trigger);
+    expect(screen.getByRole("navigation", { name: "Account" })).toBeTruthy();
+    await interaction.click(screen.getByRole("heading", { level: 1 }));
+    expect(screen.queryByRole("navigation", { name: "Account" })).toBeNull();
+    trigger.focus();
+    await interaction.keyboard("{ArrowUp}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sign out" }));
+    await interaction.tab();
+    expect(screen.queryByRole("navigation", { name: "Account" })).toBeNull();
+    await interaction.click(trigger);
+    await interaction.click(within(screen.getByRole("navigation", { name: "Account" })).getByRole("link", { name: "My profile" }));
+    expect(screen.getByRole("button", { name: "Save profile" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Account" })).toBeNull();
+    await interaction.click(trigger);
+    await interaction.click(within(screen.getByRole("navigation", { name: "Main navigation" })).getByRole("link", { name: "Explore" }));
+    expect(screen.getByRole("tabpanel")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Account" })).toBeNull();
+  });
+
+  it("sends an already signed-in researcher from the login route to Explore", () => {
+    signedIn();
+    openApp("/login");
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("tabpanel")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save profile" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign in with GitHub" })).toBeNull();
+  });
   it("renders the headline evidence on the feed and all section figures on the investigation page", async () => {
     const d = portal.state.discoveries[0];
     d.question = "Does the signal survive the controls?";
@@ -172,7 +243,7 @@ describe("Public research and real account interface", () => {
         .getAttribute("aria-selected"),
     ).toBe("true");
     await interaction.click(
-      within(screen.getByRole("tabpanel")).getByRole("link"),
+      within(screen.getByRole("tabpanel")).getByRole("link", { name: /Reassessing color gradients in faint galaxies/ }),
     );
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
       "Reassessing color gradients in faint galaxies",
@@ -350,9 +421,9 @@ describe("Public research and real account interface", () => {
         <App />
       </MemoryRouter>,
     );
-    expect((screen.getByLabelText("Full name") as HTMLInputElement).value).toBe(
-      "Test Researcher",
-    );
+    expect(screen.getByRole("link", { name: "Explore" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("tabpanel")).toBeTruthy();
+    expect(screen.queryByLabelText("Full name")).toBeNull();
   });
 
   it("shows callback failure without creating an account or exposing callback tokens", () => {
@@ -896,6 +967,7 @@ describe("Public research and real account interface", () => {
     });
     const interaction = userEvent.setup();
     openApp();
+    await interaction.click(screen.getByRole("button", { name: "Account menu for Test Researcher" }));
     await interaction.click(screen.getByRole("button", { name: "Sign out" }));
     expect(portal.signOut).toHaveBeenCalledOnce();
     expect(screen.getByRole("alert").textContent).toContain(
@@ -904,6 +976,21 @@ describe("Public research and real account interface", () => {
     expect(
       screen.queryByRole("combobox", { name: /persona|role/i }),
     ).toBeNull();
+  });
+
+  it("disables duplicate sign-out requests and recovers the dropdown after an unexpected error", async () => {
+    signedIn();
+    let reject!: (reason: Error) => void;
+    portal.signOut = vi.fn(() => new Promise<ActionResult>((_resolve, rejectRequest) => { reject = rejectRequest; }));
+    const interaction = userEvent.setup();
+    openApp();
+    await interaction.click(screen.getByRole("button", { name: "Account menu for Test Researcher" }));
+    await interaction.click(screen.getByRole("button", { name: "Sign out" }));
+    expect((screen.getByRole("button", { name: "Signing out…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(portal.signOut).toHaveBeenCalledOnce();
+    await act(async () => reject(new Error("Network disconnected")));
+    expect(screen.getByRole("alert").textContent).toContain("Sign-out could not be completed.");
+    expect((screen.getByRole("button", { name: "Sign out" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("preserves the original manuscript timestamp and revision through editing and a concurrent refresh", async () => {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import EvidenceFigure from "../components/EvidenceFigure";
+import FollowDiscovery from "../components/FollowDiscovery";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -23,12 +24,16 @@ const researchFields = [...new Set(topics.map((topic) => topic.field))];
 const tabId = (tab: FeedTab) =>
   `research-tab-${tab.toLowerCase().replaceAll(" ", "-")}`;
 
-export default function HomePage() {
+export default function HomePage({ followingOnly = false }: { followingOnly?: boolean }) {
   const { state, user, configured, loading, error } = usePortal();
   const [selectedTab, setSelectedTab] = useState<FeedTab | null>(null);
   const [stage, setStage] = useState<Stage | "All stages">("All stages");
   const [query, setQuery] = useState("");
-  const personalized = hasResearchInterests(user);
+  const personalized = !followingOnly && hasResearchInterests(user);
+  const followed = new Set(user?.followedDiscoveryIds ?? []);
+  const available = followingOnly
+    ? state.discoveries.filter((discovery) => followed.has(discovery.id))
+    : state.discoveries;
   const fields: FeedTab[] = [
     ...(personalized ? ["For you" as const] : []),
     "Recent discoveries",
@@ -38,7 +43,7 @@ export default function HomePage() {
     ? selectedTab
     : personalized ? "For you" : "Recent discoveries";
   const items = orderDiscoveries(
-    state.discoveries.filter(
+    available.filter(
       (d) =>
         (field === "Recent discoveries" || field === "For you" || d.field === field) &&
         (stage === "All stages" || d.status === stage) &&
@@ -61,30 +66,35 @@ export default function HomePage() {
         </p>
       </section>
     );
+  if (followingOnly && !user && !loading) return <section className="empty-state">
+    <h1>Following</h1>
+    <p>Sign in to keep the discoveries you follow together.</p>
+    <Link className="btn btn-primary" to="/login">Sign in with GitHub</Link>
+  </section>;
   return (
     <>
       <section className="home-hero">
         <div>
           <span className="eyebrow">
             <span className="tiny-line" />
-            The research observatory
+            {followingOnly ? "Your reading list" : "The research observatory"}
           </span>
-          <h1>
+          {followingOnly ? <h1>Following</h1> : <h1>
             New questions.
             <br />
             <em>Shared discoveries.</em>
-          </h1>
+          </h1>}
           <p>
-            Explore discoveries from AI scientific research systems.
+            {followingOnly ? "The discoveries you follow, with their latest updates." : "Explore discoveries from AI scientific research systems."}
           </p>
         </div>
         <div className="hero-note">
           <span className="hero-number">
-            {String(state.discoveries.length).padStart(2, "0")}
+            {String(available.length).padStart(2, "0")}
             <span> / discoveries</span>
           </span>
           <div className="hero-note-rule" />
-          <span>{[...new Set(state.discoveries.map((discovery) => discovery.field))].join(" · ")}</span>
+          <span>{[...new Set(available.map((discovery) => discovery.field))].join(" · ")}</span>
         </div>
       </section>
       <div className="home-layout">
@@ -227,16 +237,22 @@ export default function HomePage() {
                     </span>
                   </div>
                 </Link>
+                <div className="discovery-card-actions">
+                  <FollowDiscovery key={user?.id ?? "visitor"} discovery={d} />
+                </div>
               </article>
             ))}
             {items.length === 0 && (
               <div className="empty-state">
                 <Search size={28} />
-                <h2>{state.discoveries.length ? "No discoveries match" : "No discoveries available yet"}</h2>
-                <p>{state.discoveries.length
+                <h2>{followingOnly && !available.length ? "No followed discoveries yet" : available.length ? "No discoveries match" : "No discoveries available yet"}</h2>
+                <p>{followingOnly && !available.length
+                  ? "Follow an investigation from Explore to find it here."
+                  : available.length
                   ? "Try another field, stage, or search term."
                   : "New investigations will appear here when they are available."}</p>
-                {state.discoveries.length > 0 && <button
+                {followingOnly && !available.length && <Link className="btn btn-primary" to="/">Explore discoveries</Link>}
+                {available.length > 0 && <button
                   className="btn btn-secondary"
                   onClick={() => {
                     setSelectedTab(null);

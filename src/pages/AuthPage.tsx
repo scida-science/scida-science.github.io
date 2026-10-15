@@ -6,7 +6,7 @@ import type { ActionResult } from "../types";
 
 export function AuthCallbackPage() {
   const { user, configured, loading, error } = usePortal();
-  if (user) return <Navigate replace to="/profile" />;
+  if (user) return <Navigate replace to="/" />;
   return (
     <section className="panel stack account-callback">
       <span className="eyebrow">Researcher account</span>
@@ -17,7 +17,7 @@ export function AuthCallbackPage() {
       </h1>
       <p>
         {loading
-          ? "Verifying your account and loading your research profile."
+          ? "Verifying your account and loading discoveries."
           : error ||
             (configured
               ? "Return to sign in and start a new GitHub sign-in request."
@@ -82,7 +82,7 @@ export default function AuthPage() {
         ) : (
           <>
             <p className="muted">
-              Sign in to save your profile and apply to review research.
+              Sign in to follow discoveries and apply to review research.
             </p>
             <button
               type="button"

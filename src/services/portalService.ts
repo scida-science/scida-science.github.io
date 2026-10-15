@@ -180,6 +180,14 @@ export function createPortalService(
       return repo.loadFigure(discoveryId, figureId);
     },
     refresh,
+    setFollowing(discoveryId: string, following: boolean): Promise<ActionResult> {
+      if (!/^[A-Za-z0-9_-]+$/.test(discoveryId) || typeof following !== "boolean")
+        return Promise.resolve(fail("Choose a discovery to follow."));
+      return mutate(
+        (repository) => repository.setFollowing(discoveryId, following),
+        following ? "Discovery added to Following." : "Discovery removed from Following.",
+      );
+    },
     async signInWithGitHub(): Promise<ActionResult> {
       if (!client || !auth) return missingBackend();
       try {
