@@ -15,6 +15,14 @@ export class ApiError extends Error {
   }
 }
 export const SESSION_KEY = "scida.session.v1";
+export const SESSION_MIGRATION_KEY = "scida.session.migrated.v1";
+export function browserLocalStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 export function browserSessionStorage(): Storage | null {
   try {
     return window.sessionStorage;
@@ -97,44 +105,100 @@ export interface ApiDependencies {
   now?: () => number;
 }
 
-/** Only revocable SciDA sessions reach this tab. GitHub credentials stay on the Worker. */
+/** Only revocable SciDA sessions persist in the browser. GitHub credentials stay on the Worker. */
 export function createApiClient(
   baseUrl: string,
   dependencies: ApiDependencies = {},
 ) {
-  const storage =
-    dependencies.storage === undefined
-      ? browserSessionStorage()
-      : dependencies.storage;
+  const useBrowserStorage = dependencies.storage === undefined;
+  const storage = dependencies.storage === undefined ? browserLocalStorage() : dependencies.storage;
+  const legacyStorage = useBrowserStorage ? browserSessionStorage() : null;
   const fetcher = dependencies.fetch ?? globalThis.fetch.bind(globalThis);
   const now = dependencies.now ?? Date.now;
   const listeners = new Set<() => void>();
   let session: SciDASession | null = null;
-  try {
-    const raw = storage?.getItem(SESSION_KEY);
-    session = raw ? parseSession(JSON.parse(raw), now()) : null;
-    if (raw && !session) storage?.removeItem(SESSION_KEY);
-  } catch {
+  let blockedToken: string | null = null;
+  let listening = false;
+  const notify = () => listeners.forEach((listener) => listener());
+  const storageError = () => new Error(
+    "Browser storage is unavailable. Enable browser storage before signing in.",
+  );
+  function removeLegacySession() {
     try {
-      storage?.removeItem(SESSION_KEY);
+      legacyStorage?.removeItem(SESSION_KEY);
     } catch {
-      /* Storage can be disabled. */
+      // The persistent migration marker also prevents reuse of a legacy token.
     }
   }
-  const notify = () => listeners.forEach((listener) => listener());
-  function clearSession() {
-    const changed = session !== null;
-    session = null;
+  function markMigrated() {
+    if (useBrowserStorage) storage?.setItem(SESSION_MIGRATION_KEY, "1");
+  }
+  function decodedSession(raw: string | null): SciDASession | null {
+    if (!raw) return null;
     try {
-      storage?.removeItem(SESSION_KEY);
+      return parseSession(JSON.parse(raw), now());
     } catch {
-      /* In-memory access is still revoked. */
+      return null;
     }
+  }
+  function updateSession(next: SciDASession | null) {
+    const changed = session?.token !== next?.token || session?.expiresAt !== next?.expiresAt;
+    session = next;
     if (changed) notify();
   }
+  // Once a persistent session has existed, an older tab must never migrate its
+  // leftover token after another tab signs out. The marker contains no identity.
+  if (useBrowserStorage && storage) {
+    try {
+      const persistent = storage.getItem(SESSION_KEY);
+      if (persistent !== null || storage.getItem(SESSION_MIGRATION_KEY) === "1") {
+        try { markMigrated(); } finally { removeLegacySession(); }
+      } else {
+        const legacy = legacyStorage?.getItem(SESSION_KEY) ?? null;
+        if (legacy !== null) {
+          const validated = decodedSession(legacy);
+          markMigrated();
+          if (validated) storage.setItem(SESSION_KEY, JSON.stringify(validated));
+          removeLegacySession();
+        }
+      }
+    } catch {
+      // Never fall back to an unpersisted in-memory sign-in. setSession reports
+      // blocked storage explicitly if the user attempts to sign in again.
+    }
+  }
   function getSession(): SciDASession | null {
-    if (session && Date.parse(session.expiresAt) <= now()) clearSession();
-    return session;
+    let next: SciDASession | null = null;
+    try {
+      const raw = storage?.getItem(SESSION_KEY) ?? null;
+      next = decodedSession(raw);
+      if (raw && !next) {
+        const latest = storage?.getItem(SESSION_KEY) ?? null;
+        if (latest === raw) {
+          storage?.removeItem(SESSION_KEY);
+          removeLegacySession();
+        } else next = decodedSession(latest);
+      }
+    } catch {
+      // Fail closed when storage becomes unreadable; do not retain privileges.
+      next = null;
+    }
+    if (next?.token === blockedToken) next = null;
+    updateSession(next);
+    return session ? { ...session } : null;
+  }
+  function clearSession(expectedToken?: string) {
+    const previousToken = session?.token;
+    const current = getSession();
+    if (expectedToken !== undefined && current?.token !== expectedToken) return;
+    blockedToken = current?.token ?? previousToken ?? blockedToken;
+    let failed = false;
+    try { markMigrated(); } catch { failed = true; }
+    try { storage?.removeItem(SESSION_KEY); } catch { failed = true; }
+    removeLegacySession();
+    updateSession(null);
+    if (failed)
+      throw new Error("Signed out of this tab, but browser storage could not be cleared. Enable browser storage and sign out again.");
   }
   function setSession(value: unknown) {
     const validated = parseSession(value, now());
@@ -142,14 +206,26 @@ export function createApiClient(
       throw new Error(
         "The sign-in service returned an invalid or expired SciDA session.",
       );
-    if (!storage)
-      throw new Error(
-        "Session storage is unavailable. Enable browser storage before signing in.",
-      );
-    storage.setItem(SESSION_KEY, JSON.stringify(validated));
-    session = validated;
-    notify();
+    if (!storage) throw storageError();
+    try {
+      markMigrated();
+      const value = JSON.stringify(validated);
+      storage.setItem(SESSION_KEY, value);
+      if (storage.getItem(SESSION_KEY) !== value) throw storageError();
+    } catch {
+      throw storageError();
+    }
+    removeLegacySession();
+    blockedToken = null;
+    updateSession(validated);
   }
+  function onStorage(event: StorageEvent) {
+    if (event.storageArea !== storage || (event.key !== SESSION_KEY && event.key !== null)) return;
+    // Read the latest value instead of a potentially delayed event.newValue.
+    removeLegacySession();
+    getSession();
+  }
+  getSession();
   async function response(
     path: string,
     body?: unknown,
@@ -177,7 +253,12 @@ export function createApiClient(
       } catch {
         payload = null;
       }
-      if (result.status === 401 && token === session?.token) clearSession();
+      if (result.status === 401 && token) {
+        try { clearSession(token); }
+        catch (error) {
+          throw new ApiError(error instanceof Error ? error.message : "Browser storage could not be cleared.", 401);
+        }
+      }
       throw new ApiError(responseError(payload, result.status), result.status);
     }
     return result;
@@ -190,8 +271,17 @@ export function createApiClient(
     clearSession,
     subscribeSession(listener: () => void) {
       listeners.add(listener);
+      if (!listening && storage && typeof window !== "undefined") {
+        window.addEventListener("storage", onStorage);
+        listening = true;
+      }
+      getSession();
       return () => {
         listeners.delete(listener);
+        if (!listeners.size && listening) {
+          window.removeEventListener("storage", onStorage);
+          listening = false;
+        }
       };
     },
     async request<T>(

@@ -1,4 +1,4 @@
-import type { ApiClient } from "../lib/api";
+import { browserSessionStorage, type ApiClient } from "../lib/api";
 export const OAUTH_KEY = "scida.oauth.v1";
 const base64url = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -6,6 +6,8 @@ const base64url = (bytes: Uint8Array) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 export interface AuthDependencies {
+  /** Pending OAuth challenges belong only to the tab that started sign-in. */
+  storage?: Storage | null;
   crypto?: Crypto;
   navigate?: (url: string) => void;
   currentUrl?: () => URL;
@@ -20,6 +22,9 @@ export function createGitHubAuth(
 ) {
   const crypto = dependencies.crypto ?? globalThis.crypto;
   const now = dependencies.now ?? Date.now;
+  const storage = dependencies.storage === undefined
+    ? browserSessionStorage()
+    : dependencies.storage;
   const navigate =
     dependencies.navigate ?? ((url: string) => window.location.assign(url));
   const currentUrl =
@@ -32,9 +37,9 @@ export function createGitHubAuth(
     });
   return {
     async signIn() {
-      if (!client.storage)
+      if (!client.storage || !storage)
         throw new Error(
-          "Session storage is unavailable. Enable browser storage before signing in.",
+          "Browser storage is unavailable. Enable browser storage before signing in.",
         );
       const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
       const state = base64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -46,7 +51,7 @@ export function createGitHubAuth(
           ),
         ),
       );
-      client.storage.setItem(
+      storage.setItem(
         OAUTH_KEY,
         JSON.stringify({ verifier, state, createdAt: now() }),
       );
@@ -72,13 +77,13 @@ export function createGitHubAuth(
         createdAt?: number;
       } | null = null;
       try {
-        const raw = client.storage?.getItem(OAUTH_KEY);
+        const raw = storage?.getItem(OAUTH_KEY);
         if (raw) pending = JSON.parse(raw);
       } catch {
         pending = null;
       }
-      client.storage?.removeItem(OAUTH_KEY);
       try {
+        storage?.removeItem(OAUTH_KEY);
         if (callbackError) throw new Error(callbackError);
         if (
           !code ||

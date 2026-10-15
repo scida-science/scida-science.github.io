@@ -43,9 +43,9 @@ const json = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 const services: PortalService[] = [];
-function setup(options: { role?: Profile["role"]; signedIn?: boolean } = {}) {
+function setup(options: { role?: Profile["role"]; signedIn?: boolean; browserStorage?: boolean } = {}) {
   if (options.signedIn !== false)
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session()));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session()));
   let currentProfile = profile(options.role);
   const routes = new Map<
     string,
@@ -71,11 +71,12 @@ function setup(options: { role?: Profile["role"]; signedIn?: boolean } = {}) {
   });
   const client = createApiClient("https://api.scida.example", {
     fetch: fetcher,
-    storage: sessionStorage,
+    ...(options.browserStorage ? {} : { storage: localStorage }),
   });
   const navigate = vi.fn();
   const auth = createGitHubAuth(client, {
     crypto: webcrypto as Crypto,
+    storage: sessionStorage,
     navigate,
   });
   const download = vi.fn();
@@ -175,7 +176,7 @@ describe("API configuration and sessions", () => {
         .ok,
     ).toBe(false);
   });
-  it("persists only a SciDA session in sessionStorage and reloads real portal data", async () => {
+  it("persists only a SciDA session in localStorage and reloads real portal data", async () => {
     const { client, service, fetcher } = setup();
     await service.start();
     expect(service.getSnapshot().user?.role).toBe("Reader");
@@ -189,11 +190,11 @@ describe("API configuration and sessions", () => {
     });
     const reloaded = createApiClient(client.baseUrl, {
       fetch: fetcher,
-      storage: sessionStorage,
+      storage: localStorage,
     });
     expect(reloaded.getSession()?.token).toBe(token);
-    expect(localStorage.length).toBe(0);
-    expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!)).toEqual(
+    expect(sessionStorage.length).toBe(0);
+    expect(JSON.parse(localStorage.getItem(SESSION_KEY)!)).toEqual(
       client.getSession(),
     );
   });
@@ -204,15 +205,15 @@ describe("API configuration and sessions", () => {
       { ...session(), expiresAt: "2000-01-01" },
       { token: "short", expiresAt: session().expiresAt },
     ]) {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(value));
       const client = createApiClient("https://api.scida.example", {
-        storage: sessionStorage,
+        storage: localStorage,
       });
       expect(client.getSession()).toBeNull();
-      expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+      expect(localStorage.getItem(SESSION_KEY)).toBeNull();
     }
   });
-  it("takes roles from the server even if session storage contains forged privileges", async () => {
+  it("takes roles from the server even if persistent browser storage contains forged privileges", async () => {
     const { client, service } = setup();
     client.setSession({
       ...session(),
@@ -221,7 +222,7 @@ describe("API configuration and sessions", () => {
     });
     await service.start();
     expect(service.getSnapshot().user?.role).toBe("Reader");
-    expect(JSON.parse(sessionStorage.getItem(SESSION_KEY)!)).not.toHaveProperty(
+    expect(JSON.parse(localStorage.getItem(SESSION_KEY)!)).not.toHaveProperty(
       "role",
     );
     expect(
@@ -311,6 +312,19 @@ describe("Senior Approver permissions", () => {
 });
 
 describe("GitHub OAuth with PKCE", () => {
+  it("requires both persistent session storage and tab-only OAuth storage", async () => {
+    const { client, navigate } = setup({ signedIn: false });
+    const noTabStorage = createGitHubAuth(client, { storage: null, navigate });
+    await expect(noTabStorage.signIn()).rejects.toThrow(/Browser storage is unavailable/);
+    const noPersistentStorage = createGitHubAuth(
+      createApiClient(client.baseUrl, { storage: null }),
+      { storage: sessionStorage, navigate },
+    );
+    await expect(noPersistentStorage.signIn()).rejects.toThrow(/Browser storage is unavailable/);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(OAUTH_KEY)).toBeNull();
+  });
+
   it("redirects top-level with a challenge and state, never a verifier or GitHub token", async () => {
     const { auth, navigate } = setup({ signedIn: false });
     await auth.signIn();
@@ -326,6 +340,8 @@ describe("GitHub OAuth with PKCE", () => {
     );
     expect(url.href).not.toContain(pending.verifier);
     expect(pending.verifier).toHaveLength(43);
+    expect(localStorage.getItem(OAUTH_KEY)).toBeNull();
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
   });
   it("checks state, exchanges once across StrictMode restarts, and removes callback values", async () => {
     const { service, auth, fetcher } = setup({ signedIn: false });
@@ -355,6 +371,9 @@ describe("GitHub OAuth with PKCE", () => {
       false,
     );
     expect(sessionStorage.getItem(OAUTH_KEY)).toBeNull();
+    expect(localStorage.getItem(OAUTH_KEY)).toBeNull();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(SESSION_KEY)!)).toEqual({ token, expiresAt: expect.any(String) });
     expect(window.location.hash).toBe("#/");
     expect(service.getSnapshot().user?.role).toBe("Reader");
   });
@@ -389,22 +408,106 @@ describe("GitHub OAuth with PKCE", () => {
     );
     await service.start();
     expect(service.getSnapshot().error).toBe("Exchange code expired");
-    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
     expect(service.getSnapshot().user).toBeNull();
   });
 });
 
 describe("permission and session boundaries", () => {
+  it("restores the server account after closing a tab and opening a new one", async () => {
+    const first = setup({ role: "Admin", browserStorage: true });
+    await first.service.start();
+    first.service.stop();
+    sessionStorage.clear();
+    const reopened = setup({ signedIn: false, role: "Admin", browserStorage: true });
+    await reopened.service.start();
+    expect(reopened.service.getSnapshot().user?.role).toBe("Admin");
+    expect(new Headers(reopened.fetcher.mock.calls[0][1]?.headers).get("Authorization")).toBe(`Bearer ${token}`);
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it("clears private state immediately on another tab's logout and restores public discoveries", async () => {
+    const { service, client } = setup({ role: "Admin", browserStorage: true });
+    await service.start();
+    localStorage.removeItem(SESSION_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: SESSION_KEY, storageArea: localStorage }));
+    expect(client.getSession()).toBeNull();
+    expect(service.getSnapshot().user).toBeNull();
+    expect(service.getSnapshot().state.profiles).toEqual([]);
+    await vi.waitFor(() => expect(service.getSnapshot().state.discoveries).toHaveLength(discoveries.length));
+    expect(service.getSnapshot().user).toBeNull();
+  });
+
+  it("loads a replacement account even when storage changes during the initial request", async () => {
+    const { service, routes } = setup({ role: "Admin", browserStorage: true });
+    let resolveOld!: (response: Response) => void;
+    const nextToken = "scida-new-account-session-01234567890123456789";
+    const reader = { ...profile(), id: "github:67890" };
+    routes.set("/v1/portal", (init) => {
+      if (new Headers(init.headers).get("Authorization") === `Bearer ${token}`)
+        return new Promise<Response>((resolve) => { resolveOld = resolve; });
+      return json({ state: { ...emptyPortalState(), profiles: [reader] }, user: reader });
+    });
+    const started = service.start();
+    await vi.waitFor(() => expect(resolveOld).toBeDefined());
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session(), token: nextToken }));
+    window.dispatchEvent(new StorageEvent("storage", { key: SESSION_KEY, storageArea: localStorage }));
+    expect(service.getSnapshot().user).toBeNull();
+    resolveOld(json({ state: { ...emptyPortalState(), profiles: [profile("Admin")] }, user: profile("Admin") }));
+    await started;
+    await vi.waitFor(() => expect(service.getSnapshot().user?.id).toBe(reader.id));
+    expect(service.getSnapshot().user?.role).toBe("Reader");
+    expect(service.getSnapshot().state.profiles).toEqual([reader]);
+  });
+
+  it("uses a changed stored session without waiting for an event or duplicating the refresh", async () => {
+    const { service, setProfile, fetcher } = setup({ role: "Admin", browserStorage: true });
+    await service.start();
+    const reader = { ...profile(), id: "github:67890" };
+    setProfile(reader);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session(), token: "scida-new-account-session-01234567890123456789" }));
+    const observedRoles: Array<Profile["role"] | undefined> = [];
+    const stop = service.subscribe(() => observedRoles.push(service.getSnapshot().user?.role));
+    const result = await service.actions.refresh();
+    await Promise.resolve();
+    stop();
+    expect(result.ok).toBe(true);
+    expect(observedRoles[0]).toBeUndefined();
+    expect(service.getSnapshot().user?.id).toBe(reader.id);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let a late write failure from the old account overwrite the new account", async () => {
+    const { service, routes, setProfile } = setup({ browserStorage: true });
+    await service.start();
+    let resolveOld!: (response: Response) => void;
+    routes.set("/v1/code-requests", () => new Promise<Response>((resolve) => { resolveOld = resolve; }));
+    const write = service.actions.requestCode(discoveries[0].id, "Reproduce the analysis");
+    await vi.waitFor(() => expect(resolveOld).toBeDefined());
+    const reader = { ...profile(), id: "github:67890" };
+    setProfile(reader);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session(), token: "scida-new-account-session-01234567890123456789" }));
+    window.dispatchEvent(new StorageEvent("storage", { key: SESSION_KEY, storageArea: localStorage }));
+    await vi.waitFor(() => expect(service.getSnapshot().user?.id).toBe(reader.id));
+    resolveOld(json({ error: "Old account's rejected request" }, 403));
+    expect((await write).ok).toBe(false);
+    expect(service.getSnapshot().user?.id).toBe(reader.id);
+    expect(service.getSnapshot().error).toBeNull();
+  });
+
   it("clears identity and private state when the API revokes a session", async () => {
     const { service, client, routes } = setup({ role: "Admin" });
     await service.start();
-    routes.set("/v1/portal", () => json({ error: "Session revoked" }, 401));
+    routes.set("/v1/portal", (init) => new Headers(init.headers).has("Authorization")
+      ? json({ error: "Session revoked" }, 401)
+      : json({ state: { ...emptyPortalState(), discoveries: discoveries.map((item) => ({ ...item, illustrative: false })) }, user: null }));
     expect((await service.actions.refresh()).ok).toBe(false);
     expect(client.getSession()).toBeNull();
-    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
     expect(service.getSnapshot().user).toBeNull();
     expect(service.getSnapshot().state.profiles).toEqual([]);
-    expect(service.getSnapshot().error).toBe("Session revoked");
+    await vi.waitFor(() => expect(service.getSnapshot().state.discoveries).toHaveLength(discoveries.length));
+    expect(service.getSnapshot().error).toBeNull();
   });
   it("clears account privileges automatically when the SciDA session expires", async () => {
     vi.useFakeTimers();
@@ -430,7 +533,7 @@ describe("permission and session boundaries", () => {
     );
     const client = createApiClient("https://api.scida.example", {
       fetch: fetcher,
-      storage: sessionStorage,
+      storage: localStorage,
     });
     client.setSession(session());
     const request = client.request("/v1/portal");
@@ -440,7 +543,7 @@ describe("permission and session boundaries", () => {
     await expect(request).rejects.toBeInstanceOf(ApiError);
     expect(client.getSession()?.token).toBe(newToken);
   });
-  it("revokes logout server-side and clears the tab before waiting for the network", async () => {
+  it("revokes logout server-side and clears the browser session before waiting for the network", async () => {
     const { service, client, fetcher } = setup({ role: "Admin" });
     await service.start();
     const result = service.actions.signOut();
@@ -455,7 +558,7 @@ describe("permission and session boundaries", () => {
       `Bearer ${token}`,
     );
   });
-  it("reports revocation failures honestly while leaving the tab signed out", async () => {
+  it("reports revocation failures honestly while leaving the browser signed out", async () => {
     const { service, client, routes } = setup();
     await service.start();
     routes.set("/auth/logout", () =>
@@ -466,6 +569,39 @@ describe("permission and session boundaries", () => {
     expect(result.message).toMatch(/revocation could not be confirmed/);
     expect(client.getSession()).toBeNull();
     expect(service.getSnapshot().user).toBeNull();
+  });
+  it("still revokes the server session if the browser refuses to remove its saved value", async () => {
+    const { service, client, fetcher } = setup();
+    await service.start();
+    const remove = Storage.prototype.removeItem;
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (this: Storage, key) {
+      if (this === localStorage && key === SESSION_KEY) throw new Error("Storage blocked");
+      return remove.call(this, key);
+    });
+    const result = await service.actions.signOut();
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/browser storage could not be cleared/i);
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/auth/logout"))).toBe(true);
+    expect(client.getSession()).toBeNull();
+    expect(service.getSnapshot().user).toBeNull();
+  });
+
+  it("does not overwrite a replacement account when an older logout fails", async () => {
+    const { service, routes, setProfile } = setup({ browserStorage: true });
+    await service.start();
+    let resolveLogout!: (response: Response) => void;
+    routes.set("/auth/logout", () => new Promise<Response>((resolve) => { resolveLogout = resolve; }));
+    const logout = service.actions.signOut();
+    await vi.waitFor(() => expect(resolveLogout).toBeDefined());
+    const reader = { ...profile(), id: "github:67890" };
+    setProfile(reader);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session(), token: "scida-new-account-session-01234567890123456789" }));
+    window.dispatchEvent(new StorageEvent("storage", { key: SESSION_KEY, storageArea: localStorage }));
+    await vi.waitFor(() => expect(service.getSnapshot().user?.id).toBe(reader.id));
+    resolveLogout(json({ error: "Old logout could not complete" }, 503));
+    expect((await logout).ok).toBe(false);
+    expect(service.getSnapshot().user?.id).toBe(reader.id);
+    expect(service.getSnapshot().error).toBeNull();
   });
   it("discards a delayed privileged response after account logout", async () => {
     const { service, client, routes } = setup({ role: "Admin" });

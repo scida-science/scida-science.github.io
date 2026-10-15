@@ -1,4 +1,4 @@
-import { ApiError, type ApiClient } from "../lib/api";
+import type { ApiClient } from "../lib/api";
 import { existingPackageFile, verifyPackageFile, type PackageDirectory } from "../lib/reviewerPackage";
 import type {
   ActionResult,
@@ -84,6 +84,10 @@ export function createPortalService(
   let active = false;
   let initialized = false;
   let initializing: Promise<void> | null = null;
+  let sessionGeneration = 0;
+  let sessionRefreshPending = false;
+  let sessionRefreshQueued = false;
+  let clearingSession = false;
   let unsubscribe: (() => void) | undefined;
   let expiryTimer: ReturnType<typeof setTimeout> | undefined;
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
@@ -105,6 +109,23 @@ export function createPortalService(
     message:
       "The account changed while this request was running. Refresh to check its result.",
   });
+  const captureSession = () => ({
+    token: client?.getSession()?.token,
+    generation: sessionGeneration,
+  });
+  const sessionChanged = (captured: ReturnType<typeof captureSession>) => {
+    const token = client?.getSession()?.token;
+    return captured.token !== token || captured.generation !== sessionGeneration;
+  };
+  function scheduleSessionRefresh() {
+    if (!active || initializing || clearingSession || !sessionRefreshPending || sessionRefreshQueued) return;
+    sessionRefreshQueued = true;
+    queueMicrotask(() => {
+      sessionRefreshQueued = false;
+      if (!active || initializing || clearingSession || !sessionRefreshPending) return;
+      void refresh();
+    });
+  }
 
   function scheduleExpiry() {
     clearTimeout(expiryTimer);
@@ -123,28 +144,27 @@ export function createPortalService(
   }
   async function refresh(): Promise<ActionResult> {
     if (!client || !repo) return missingBackend();
-    const token = client.getSession()?.token;
+    const captured = captureSession();
+    // A storage read can notify subscribers synchronously. This request already
+    // uses that latest session, so it consumes any refresh queued by the read.
+    sessionRefreshPending = false;
     const request = ++revision;
     publish({ loading: true });
     try {
       const result = await repo.read();
-      if (request !== revision || token !== client.getSession()?.token)
+      if (sessionChanged(captured) || request !== revision)
         return changedAccount();
       publish({ ...result, loading: false, error: null });
       scheduleExpiry();
       return { ok: true, message: "Research portal refreshed." };
     } catch (error) {
-      if (request !== revision) {
-        if (
-          error instanceof ApiError &&
-          error.status === 401 &&
-          !client.getSession()
-        )
-          return fail(reason(error));
+      if (sessionChanged(captured) || request !== revision) {
         return changedAccount();
       }
       publish({ state: emptyPortalState(), user: null, loading: false });
       return fail(reason(error));
+    } finally {
+      scheduleSessionRefresh();
     }
   }
   async function mutate(
@@ -152,13 +172,14 @@ export function createPortalService(
     message: string,
   ): Promise<ActionResult> {
     if (!client || !repo) return missingBackend();
-    const token = client.getSession()?.token;
-    if (!snapshot.user || !token)
+    const captured = captureSession();
+    if (!snapshot.user || !captured.token)
       return fail("Sign in with GitHub to continue.");
     try {
       await operation(repo);
-      if (token !== client.getSession()?.token) return changedAccount();
+      if (sessionChanged(captured)) return changedAccount();
       const refreshed = await refresh();
+      if (sessionChanged(captured)) return changedAccount();
       return {
         ok: true,
         message: refreshed.ok
@@ -166,6 +187,7 @@ export function createPortalService(
           : `${message} The latest data could not be loaded; refresh to check the result.`,
       };
     } catch (error) {
+      if (sessionChanged(captured)) return changedAccount();
       return fail(reason(error));
     }
   }
@@ -200,28 +222,48 @@ export function createPortalService(
     },
     async signOut(): Promise<ActionResult> {
       if (!client) return missingBackend();
-      const token = client.getSession()?.token;
-      ++revision;
-      client.clearSession();
-      publish({
-        user: null,
-        state: emptyPortalState(),
-        loading: true,
-        error: null,
-      });
+      let token: string | undefined;
+      let removalError: string | null = null;
+      // This action owns the one public refresh after local removal. External
+      // account changes after this synchronous block still refresh immediately.
+      clearingSession = true;
+      try {
+        token = client.getSession()?.token;
+        ++revision;
+        try {
+          if (token) client.clearSession(token);
+        } catch (error) {
+          removalError = reason(error);
+        }
+        if (!client.getSession()) sessionRefreshPending = false;
+        publish({ user: null, state: emptyPortalState(), loading: true, error: null });
+      } finally {
+        clearingSession = false;
+        scheduleSessionRefresh();
+      }
+      const signedOut = captureSession();
+      let revocationError: string | null = null;
       try {
         if (token) await client.request("/auth/logout", {}, { token });
-        await refresh();
-        return {
-          ok: true,
-          message: "Signed out. Your SciDA session has been revoked.",
-        };
       } catch (error) {
-        publish({ loading: false });
-        return fail(
-          `Signed out of this tab, but server revocation could not be confirmed: ${reason(error)}`,
-        );
+        revocationError = reason(error);
       }
+      if (signedOut.token || sessionChanged(signedOut)) return changedAccount();
+      const refreshed = await refresh();
+      if (sessionChanged(signedOut)) return changedAccount();
+      if (removalError || revocationError) {
+        const details = [
+          removalError ? `The saved browser session could not be removed: ${removalError}` : null,
+          revocationError ? `Server revocation could not be confirmed: ${revocationError}` : null,
+        ].filter(Boolean).join(" ");
+        return fail(`Signed out of this ${removalError ? "tab" : "browser"}. ${details}`);
+      }
+      return {
+        ok: true,
+        message: refreshed.ok
+          ? "Signed out. Your SciDA session has been revoked."
+          : "Signed out. Your SciDA session has been revoked; public discoveries could not be refreshed.",
+      };
     },
     saveProfile(input: ProfileInput): Promise<ActionResult> {
       const error = profileError(input);
@@ -275,9 +317,9 @@ export function createPortalService(
       email: string,
     ): Promise<ActionResult & { code?: string }> {
       if (!repo || !client) return missingBackend();
+      const captured = captureSession();
       const user = snapshot.user;
-      const token = client.getSession()?.token;
-      if (!user || !token) return fail("Sign in with GitHub to continue.");
+      if (!user || !captured.token) return fail("Sign in with GitHub to continue.");
       if (
         !validTopics(topics, true) ||
         !topics.every((topic) => canManageTopic(user, topic))
@@ -290,7 +332,7 @@ export function createPortalService(
         return fail("Enter the intended researcher's verified email address.");
       try {
         const invitation = await repo.createInvitation(topics, email.trim());
-        if (token !== client.getSession()?.token) return changedAccount();
+        if (sessionChanged(captured)) return changedAccount();
         const { code, ...record } = invitation;
         if (!code)
           throw new Error(
@@ -313,6 +355,7 @@ export function createPortalService(
           code,
         };
       } catch (error) {
+        if (sessionChanged(captured)) return changedAccount();
         return fail(reason(error));
       }
     },
@@ -320,13 +363,13 @@ export function createPortalService(
       code: string,
     ): Promise<ActionResult & { invitation?: Invitation }> {
       if (!repo || !client) return missingBackend();
-      const token = client.getSession()?.token;
-      if (!snapshot.user || !token)
+      const captured = captureSession();
+      if (!snapshot.user || !captured.token)
         return fail("Sign in with GitHub before entering an invitation.");
       if (!bounded(code, 200)) return fail("Enter a valid invitation code.");
       try {
         const invitation = await repo.previewInvitation(code.trim());
-        if (token !== client.getSession()?.token) return changedAccount();
+        if (sessionChanged(captured)) return changedAccount();
         publish({ error: null });
         return {
           ok: true,
@@ -335,6 +378,7 @@ export function createPortalService(
           invitation,
         };
       } catch (error) {
+        if (sessionChanged(captured)) return changedAccount();
         return fail(reason(error));
       }
     },
@@ -437,14 +481,14 @@ export function createPortalService(
       kind: keyof Discovery["materials"],
     ): Promise<ActionResult> {
       if (!client || !repo) return missingBackend();
-      const token = client.getSession()?.token;
+      const captured = captureSession();
       if (
         !["paper", "appendix", "figures", "data", "repository"].includes(kind)
       )
         return fail("This supporting material is unavailable.");
       try {
         const material = await repo.downloadMaterial(discoveryId, kind);
-        if (token !== client.getSession()?.token) return changedAccount();
+        if (sessionChanged(captured)) return changedAccount();
         if (material.package) {
           publish({ error: null });
           return { ok: true, message: "The complete analysis package is ready to download.", package: material.package };
@@ -471,13 +515,14 @@ export function createPortalService(
             : "Supporting material downloaded.",
         };
       } catch (error) {
+        if (sessionChanged(captured)) return changedAccount();
         return fail(reason(error));
       }
     },
     async downloadPackageFile(discoveryId: string, kind: keyof Discovery["materials"], file: ReviewerPackageFile,
       directory?: PackageDirectory): Promise<ActionResult> {
       if (!client || !repo) return missingBackend();
-      const token = client.getSession()?.token;
+      const captured = captureSession();
       if (!/^[a-z0-9-]{1,64}$/.test(file.id) || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(file.filename) ||
           file.filename.includes("..") || !Number.isSafeInteger(file.size) || file.size < 1 || file.size > 100 * 1024 * 1024)
         return fail("Invalid package file.");
@@ -485,10 +530,10 @@ export function createPortalService(
         // Obtain current authorization even when a matching file already exists locally.
         const result = await client.download(`/v1/discoveries/${encodeURIComponent(discoveryId)}/materials/${encodeURIComponent(kind)}/files/${encodeURIComponent(file.id)}`,
           { maxBytes: file.size });
-        if (token !== client.getSession()?.token) return changedAccount();
+        if (sessionChanged(captured)) return changedAccount();
         if (!result.blob) throw new Error("The package file response is invalid.");
         await verifyPackageFile(result.blob, file);
-        if (token !== client.getSession()?.token) return changedAccount();
+        if (sessionChanged(captured)) return changedAccount();
         if (directory) {
           if (!(await existingPackageFile(directory, file))) {
             const handle = await directory.getFileHandle(file.filename, { create: true });
@@ -499,7 +544,10 @@ export function createPortalService(
         } else (dependencies.saveDownload ?? saveDownload)(result.blob, file.filename);
         publish({ error: null });
         return { ok: true, message: `Verified and saved ${file.filename}.` };
-      } catch (error) { return fail(reason(error)); }
+      } catch (error) {
+        if (sessionChanged(captured)) return changedAccount();
+        return fail(reason(error));
+      }
     },
   };
   return {
@@ -515,6 +563,8 @@ export function createPortalService(
       active = true;
       unsubscribe ??= client.subscribeSession(() => {
         ++revision;
+        ++sessionGeneration;
+        sessionRefreshPending = true;
         publish({
           user: null,
           state: emptyPortalState(),
@@ -524,10 +574,7 @@ export function createPortalService(
             : "Your SciDA session ended. Sign in with GitHub to continue.",
         });
         scheduleExpiry();
-        if (!initializing && client.getSession())
-          queueMicrotask(() => {
-            if (active) void refresh();
-          });
+        scheduleSessionRefresh();
       });
       if (!refreshTimer) {
         refreshTimer = setInterval(refreshWhenVisible, 120_000);
@@ -548,6 +595,7 @@ export function createPortalService(
         } finally {
           initialized = true;
           initializing = null;
+          scheduleSessionRefresh();
         }
       })();
       return initializing;
@@ -555,6 +603,7 @@ export function createPortalService(
     stop() {
       active = false;
       ++revision;
+      sessionRefreshPending = false;
       unsubscribe?.();
       unsubscribe = undefined;
       clearTimeout(expiryTimer);

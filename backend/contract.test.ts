@@ -46,17 +46,18 @@ const profile: ProfileInput = {
 };
 const ids = [env.ADMIN_GITHUB_ID, "200", "300", "400"];
 async function repository(userId: string | null) {
+  const entries = new Map<string, string>();
   const storage: Storage = {
-    length: 0,
-    clear() {},
-    getItem() {
-      return null;
+    get length() { return entries.size; },
+    clear() { entries.clear(); },
+    getItem(key) {
+      return entries.get(key) ?? null;
     },
-    key() {
-      return null;
+    key(index) {
+      return [...entries.keys()][index] ?? null;
     },
-    removeItem() {},
-    setItem() {},
+    removeItem(key) { entries.delete(key); },
+    setItem(key, value) { entries.set(key, value); },
   };
   const client = createApiClient(env.API_ORIGIN, {
     storage,
