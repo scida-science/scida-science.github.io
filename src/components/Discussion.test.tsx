@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import Discussion from "./Discussion";
 import { discoveries } from "../../test/fixtures/discoveries";
 import type { usePortal } from "../state/PortalContext";
-import type { ActionResult } from "../types";
+import type { ActionResult, DiscussionComment } from "../types";
 import { emptyPortalState } from "../services/repository";
 
 let portal: Pick<ReturnType<typeof usePortal>, "state" | "user" | "addComment" | "configured" | "loading" | "error">;
@@ -20,6 +20,80 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 const open = () => render(<MemoryRouter><Discussion discovery={discoveries[0]} /></MemoryRouter>);
+const comment = (changes: Partial<DiscussionComment> = {}): DiscussionComment => ({
+  id: "thread-1", discoveryId: discoveries[0].id, authorId: "test-owner", authorName: "Owner",
+  version: discoveries[0].version, parentId: null, reference: "Section 2",
+  body: "**Existing result** with `analysis.py`.", createdAt: "2026-10-15T12:00:00Z", ...changes,
+});
+
+describe("Markdown discussions", () => {
+  it("previews Markdown without changing the draft or submitting, then posts the original source", async () => {
+    open();
+    const interaction = userEvent.setup();
+    const body = "**Check this**\n\n- First assumption\n- Second assumption\n\n[Paper](https://example.org/paper)\n\n```python\nprint(1 < 2)\n```";
+    const textarea = screen.getByLabelText("Your comment") as HTMLTextAreaElement;
+    await interaction.click(textarea);
+    await interaction.paste(body);
+    await interaction.click(screen.getByRole("button", { name: "Preview" }));
+    const preview = screen.getByRole("region", { name: "Comment preview" });
+    expect((await within(preview).findByText("Check this")).tagName).toBe("STRONG");
+    expect(within(preview).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(preview).getByRole("link", { name: "Paper" }).getAttribute("href")).toBe("https://example.org/paper");
+    expect(textarea.value).toBe(body);
+    expect(portal.addComment).not.toHaveBeenCalled();
+    await interaction.click(screen.getByRole("button", { name: "Hide preview" }));
+    expect(screen.queryByRole("region", { name: "Comment preview" })).toBeNull();
+    expect(textarea.value).toBe(body);
+    await interaction.click(screen.getByRole("button", { name: "Post comment" }));
+    expect(portal.addComment).toHaveBeenCalledWith({
+      discoveryId: discoveries[0].id, parentId: null, version: discoveries[0].version, reference: "", body,
+    });
+    expect(textarea.value).toBe("");
+  });
+
+  it("renders saved roots and replies with the same formatting used in preview", async () => {
+    portal.state.comments = [comment(), comment({ id: "reply-1", parentId: "thread-1", body: "A *follow-up* with $x^2$." })];
+    const { container } = open();
+    expect((await screen.findByText("Existing result")).tagName).toBe("STRONG");
+    expect(screen.getByText("analysis.py").tagName).toBe("CODE");
+    expect((await screen.findByText("follow-up")).tagName).toBe("EM");
+    expect(container.querySelector(".is-reply .katex")).toBeTruthy();
+    expect(screen.getAllByText("Section 2")).toHaveLength(2);
+  });
+
+  it("previews a reply and preserves its parent and manuscript version when posting", async () => {
+    portal.state.comments = [comment({ version: "v0.1" })];
+    open();
+    const interaction = userEvent.setup();
+    await interaction.click(screen.getByRole("button", { name: "Reply to thread" }));
+    const reply = screen.getByLabelText("Your reply") as HTMLTextAreaElement;
+    const form = reply.closest("form")!;
+    await interaction.click(reply);
+    await interaction.paste("A **specific** validation check.");
+    await interaction.click(within(form).getByRole("button", { name: "Preview" }));
+    const preview = within(form).getByRole("region", { name: "Comment preview" });
+    expect((await within(preview).findByText("specific")).tagName).toBe("STRONG");
+    await interaction.click(within(form).getByRole("button", { name: "Post reply" }));
+    expect(portal.addComment).toHaveBeenCalledWith({
+      discoveryId: discoveries[0].id, parentId: "thread-1", version: "v0.1", reference: "Section 2",
+      body: "A **specific** validation check.",
+    });
+    expect(screen.queryByLabelText("Your reply")).toBeNull();
+  });
+
+  it("keeps a failed Markdown draft and its preview available for correction", async () => {
+    vi.mocked(portal.addComment).mockResolvedValue({ ok: false, message: "The write could not be saved." });
+    open();
+    const interaction = userEvent.setup();
+    await interaction.click(screen.getByLabelText("Your comment"));
+    await interaction.paste("**Important** check.");
+    await interaction.click(screen.getByRole("button", { name: "Preview" }));
+    await interaction.click(screen.getByRole("button", { name: "Post comment" }));
+    expect(screen.getByRole("alert").textContent).toContain("could not be saved");
+    expect((screen.getByLabelText("Your comment") as HTMLTextAreaElement).value).toBe("**Important** check.");
+    expect((await within(screen.getByRole("region", { name: "Comment preview" })).findByText("Important")).tagName).toBe("STRONG");
+  });
+});
 
 describe("Discussion submission recovery", () => {
   it("preserves a rejected draft and explains the failure as an alert", async () => {

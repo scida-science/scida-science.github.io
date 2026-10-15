@@ -8,6 +8,8 @@ Earlier deployment documentation records successful owner/Reader sign-in on 14 O
 
 Sign-in opens **Explore**. **Following** lists the discoveries saved with the Follow button on a research card or investigation page, ordered by their latest update. Profile, reviewer access and sign-out are available from the account-name menu. Follows are private account preferences persisted in the administrative GitHub repository, separate from editable profile fields; following does not grant review or material access. Existing accounts need no migration.
 
+Discussion posts and threaded replies support Markdown: emphasis, headings, lists, links, quotes, fenced code, tables, task lists and LaTeX math (`$x^2$` inline, or `$$` on separate lines for a display equation). **Preview** uses the same renderer as saved comments and does not submit the draft. Markdown source remains in the existing signed GitHub discussion records, with the same topic permissions, manuscript version and 6,000-character limit. Existing comments need no migration. Raw HTML is not executed; unsafe links are blocked, and images appear as links rather than loading remote content. The Markdown renderer loads only when a comment or preview needs it.
+
 ## Repository map
 
 | Location | Purpose |

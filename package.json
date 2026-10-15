@@ -20,7 +20,11 @@
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.0"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.9.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261014.1",
@@ -39,5 +43,8 @@
     "vite": "^7.1.0",
     "vitest": "^5.0.4",
     "wrangler": "^4.151.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   }
 }

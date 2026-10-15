@@ -181,7 +181,7 @@ it("requires a session to follow and derives preference ownership from it, never
   expect((await follow("200", { following: false, userId: "300" })).status).toBe(200);
   expect((await (await repository("200")).read()).user?.followedDiscoveryIds).toEqual([]);
 });
-it("applies, approves within scope, and persists versioned threads through the real HTTP contract", async () => {
+it("applies, approves within scope, and preserves Markdown in versioned threads through the real HTTP contract", async () => {
   const owner = await repository(env.ADMIN_GITHUB_ID),
     reader = await repository("200"),
     approver = await repository("300");
@@ -193,23 +193,61 @@ it("applies, approves within scope, and persists versioned threads through the r
     "Approved",
     "Topic evidence checked",
   );
+  const rootBody = [
+    "\n  # Review notes",
+    "",
+    "**Assumption A1** needs a reproducible check for α, β, and Δt.",
+    "",
+    String.raw`Keep the inline expression $\sigma^2 = \frac{1}{n}$ unchanged.`,
+    "",
+    "```python",
+    String.raw`path = r"results\trial_1\summary.txt"`,
+    'print("<check>", "α", path)',
+    "```",
+    "",
+    "- [ ] Inspect [the reference](https://example.org/reference).  \n\n",
+  ].join("\n");
+  const replyBody = [
+    "\n\n> Follow-up on **Assumption A1**.",
+    "",
+    "$$",
+    String.raw`\Delta t = \frac{P}{2} \pm \sigma`,
+    "$$",
+    "",
+    "Keep `x < y && y > 0` literal; the uncertainty is ±1 μs.\n  ",
+  ].join("\n");
   const comment = {
     discoveryId: "AI-001",
     version: "v0.2",
     parentId: null,
     reference: "Assumption A1",
-    body: "Please explain the dependence on this assumption.",
+    body: rootBody,
   };
   await reader.addComment(comment);
   const parent = (await reader.read()).state.comments[0];
   await reader.addComment({
     ...comment,
     parentId: parent.id,
-    body: "A proposed follow-up check.",
+    body: replyBody,
   });
-  expect((await (await repository("200")).read()).state.comments).toHaveLength(
-    2,
-  );
+  const independentlyRead = (await (await repository("200")).read()).state.comments;
+  expect(independentlyRead).toEqual([
+    expect.objectContaining({
+      id: parent.id,
+      discoveryId: "AI-001",
+      authorId: "200",
+      parentId: null,
+      version: "v0.2",
+      body: rootBody.trim(),
+    }),
+    expect.objectContaining({
+      discoveryId: "AI-001",
+      authorId: "200",
+      parentId: parent.id,
+      version: "v0.2",
+      body: replyBody.trim(),
+    }),
+  ]);
   await expect(
     reader.addComment({ ...comment, discoveryId: "AST-001" }),
   ).rejects.toMatchObject({ status: 403 });

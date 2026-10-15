@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { CornerDownRight, MessageSquare, Send } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
 import { canDiscuss } from "../services/permissions";
 import { formatDate } from "./Ui";
 import type { Discovery, DiscussionComment } from "../types";
+
+const DiscussionMarkdown = lazy(() => import("./DiscussionMarkdown"));
+
+function MarkdownBody({ children }: { children: string }) {
+  return (
+    <Suspense fallback={<div className="comment-plaintext">{children}</div>}>
+      <DiscussionMarkdown>{children}</DiscussionMarkdown>
+    </Suspense>
+  );
+}
 
 function CommentForm({
   discovery,
@@ -21,6 +31,7 @@ function CommentForm({
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
+  const [preview, setPreview] = useState(false);
   const prefix = parent?.id ?? "new-comment";
   return (
     <form
@@ -44,6 +55,7 @@ function CommentForm({
           if (result.ok) {
             setBody("");
             setReference("");
+            setPreview(false);
             onDone?.();
           }
         } catch {
@@ -82,9 +94,34 @@ function CommentForm({
           rows={4}
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          aria-describedby={`${prefix}-formatting`}
           placeholder="Ask a specific question, examine an assumption, or suggest a validation check."
         />
       </label>
+      <div className="markdown-editor-tools">
+        <details className="markdown-help">
+          <summary id={`${prefix}-formatting`}>Markdown supported · Formatting help</summary>
+          <ul className="markdown-help-examples">
+            <li><code>**bold**</code> and <code>*italic*</code></li>
+            <li><code>[link text](https://example.org)</code></li>
+            <li><code>- item</code> for a list; <code>&gt; text</code> for a quote</li>
+            <li><code>`code`</code> inline, or three backticks on separate lines for a code block</li>
+            <li><code>$x^2$</code> inline math; <code>$$</code> on separate lines around an equation</li>
+            <li>Tables and task lists are supported. Image Markdown appears as a link.</li>
+          </ul>
+        </details>
+        <button className="text-button" type="button"
+          aria-expanded={preview} aria-controls={`${prefix}-preview`}
+          onClick={() => setPreview(!preview)}>
+          {preview ? "Hide preview" : "Preview"}
+        </button>
+      </div>
+      {preview && (
+        <section className="markdown-preview" id={`${prefix}-preview`} aria-label="Comment preview">
+          {body.trim() ? <div className="discussion-markdown"><MarkdownBody>{body}</MarkdownBody></div>
+            : <p className="muted">Nothing to preview yet.</p>}
+        </section>
+      )}
       <div className="split-row">
         <small className="muted">
           Your comment and display name are visible to readers.
@@ -138,7 +175,7 @@ function CommentNode({
           {comment.reference}
         </span>
       )}
-      <p className="comment-body">{comment.body}</p>
+      <div className="comment-body discussion-markdown"><MarkdownBody>{comment.body}</MarkdownBody></div>
       {canDiscuss(user, discovery) && (
         <button
           className="text-button"
