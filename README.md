@@ -2,9 +2,9 @@
 
 SciDA presents investigations developed with AI scientific research systems and supports review by research topic. The React, TypeScript and Vite frontend runs on GitHub Pages. A Cloudflare Worker handles GitHub sign-in, authorization and private GitHub storage. This implementation uses no external database, KV or D1 service.
 
-This branch integrates three real astronomy investigations, all **Awaiting Validation**, with evidence figures, public papers and protected complete analysis packages. Historical examples are isolated in test fixtures. The production frontend has no example fallback, and the backend excludes illustrative records. Publication is deliberately deferred: pushing these preparation branches does not update the live website or Worker.
+This release integrates three real astronomy investigations, all **Awaiting Validation**, with evidence figures, public papers and protected complete analysis packages. Historical examples are isolated in test fixtures. The production frontend has no example fallback, and the backend excludes illustrative records. GitHub Pages deploys from `main`; private investigation default branches supply the research content, and the matching Worker is deployed separately.
 
-Earlier deployment documentation records a connected production site and successful owner/Reader sign-in on 14 October 2026. Those are historical checks, not a fresh verification of deployed connectivity or successful reviewer posting. The new figure support and real astronomy content still require a coordinated release. See [verification and remaining work](#verification-and-remaining-work).
+Earlier deployment documentation records successful owner/Reader sign-in on 14 October 2026. Those are historical checks, not a fresh verification of reviewer posting or large-package downloads. See [verification and remaining work](#verification-and-remaining-work).
 
 ## Repository map
 
@@ -121,7 +121,7 @@ Public visibility exposes the brief, selected images and rendered discussion thr
 | `reviewer` | Review access for its topic, including current Senior Approver scope or the owner |
 | `admin` | Configured owner identity |
 
-The prepared astronomy records configure public briefs/selected images for a future release, with public paper PDFs and sign-in required only for selected supporting downloads. Their **Analysis code** material uses the existing `reviewer` access level for the investigation's topic and points to the complete reviewer package. Direct GitHub access is not required. Local preparation does not make these arrangements live.
+The astronomy records configure public briefs, selected images and paper PDFs, with sign-in required for selected supporting downloads. Their **Analysis code** material uses the existing `reviewer` access level for the investigation's topic and points to the complete reviewer package. Direct GitHub access is not required.
 
 GitHub handles identity, passwords and recovery. A researcher's GitHub token establishes identity and verified primary email, then is discarded; repository operations use an App installation token. The browser holds only a revocable SciDA session in `sessionStorage`, for up to eight hours. OAuth uses PKCE, state, a first-party HttpOnly cookie and a single-use exchange code. Logout revokes the session; expiry or HTTP 401 clears the local identity. Configured API failures remain visible and never fabricate accounts or successful actions.
 
@@ -219,7 +219,7 @@ An actual GitHub App download of all nine stellar-binary release assets transfer
 
 All **174 archive parts** are staged in private draft releases: 55 for GRB, 110 for TOI-475 and nine for the stellar binary. GitHub asset sizes and SHA-256 digests match the local manifests. GRB and TOI-475 also passed real App downloads of their three helpers, public papers, all six figures, and first/last archive parts; full remote downloads of these two larger archives were not repeated. A local backend check using real GitHub data with preparation-branch references returned exactly three non-illustrative investigations, all Awaiting Validation. Its anonymous response exposed the three papers and nine figures, while withholding protected package URLs and private administrative records. Without branch overrides, the new backend excluded all six old placeholder records. These are preparation-branch checks, not a deployment: all four default branches remain unchanged, and the website branch's GitHub Actions build passed with deployment skipped.
 
-Publication still requires an authorized coordinated frontend/Worker release and content-branch merges, followed by desktop/mobile inspection, actual signed-in package downloads on Workers Free, reviewer approval/discussion checks, and real-world performance checks. Fresh-machine dependency installation and TOI-475's complete combined scientific replay remain unverified; the latter was deliberately not run. The deployment guide retains older owner/Reader sign-in and persistence results without treating them as verification of this release.
+The owner authorized the coordinated frontend/Worker release and content-branch merges on 15 October 2026. Follow deployment with desktop/mobile inspection, actual signed-in package downloads on Workers Free, reviewer approval/discussion checks, and real-world performance checks. Fresh-machine dependency installation and TOI-475's complete combined scientific replay remain unverified; the latter was deliberately not run. The deployment guide retains older owner/Reader sign-in and persistence results without treating them as verification of this release.
 
 Other operational limitations:
 
