@@ -1,10 +1,17 @@
 import katex from "katex";
 import "katex/dist/katex.min.css";
 
-export default function Equation({ expression }: { expression: string }) {
+export default function Equation({ expression, focusable = false, label = "Mathematical result" }: {
+  expression: string;
+  focusable?: boolean;
+  label?: string;
+}) {
   return (
     <div
       className="equation"
+      role="region"
+      aria-label={label}
+      tabIndex={focusable ? 0 : undefined}
       dangerouslySetInnerHTML={{
         __html: katex.renderToString(expression, {
           throwOnError: false,

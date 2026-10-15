@@ -1,6 +1,44 @@
 # Deploy the SciDA GitHub backend
 
-## Local bandit preparation (15 October 2026)
+## Persistent Betting release (15 October 2026)
+
+The reviewed website contribution `a197c55` descends directly from the Archive
+release `b9ccaf3`; integration preserves that history without overwriting or
+force-pushing it. The matching Worker adds mathematical headline projection
+while preserving existing visibility, topic access, status-history and material
+policies. The frontend renders the headline on both the overview and dedicated
+page, with an accessible contents control for the 13-section brief on desktop
+and mobile. Astronomy records and administrative records are not reset.
+
+The research repository is **private** at
+`scida-science/information-optimal-bandits`, with Issues enabled. Its default
+branch supplies `PersistentBetting`. Add `scida-discovery` only after the matching
+Worker and main-branch Pages deployment succeed. The public brief and complete
+paper are deliberately authorized for publication; the single-file reviewer
+ZIP remains `access: reviewer` for `bandit-theory`. A code request records intent
+but never grants access. No public release asset or raw private download URL is
+required or exposed.
+
+Predeployment verification passed **462 tests**, including opt-in checks of all
+four actual investigations, the production frontend build, backend typecheck,
+Worker dry build and packaged workerd checks. All four content documents passed
+schema, equation-syntax, material-path and applicable provenance checks. The
+paper's first and figure pages and the stacked web figure were rendered and
+visually inspected. The public bundle contains no paper, reviewer ZIP or keys.
+
+The test identities and approval decisions exist only in isolated fixtures.
+These checks establish software behavior, not scientific approval. They do not
+replace real OAuth or signed-in reviewer downloads. Browser discovery returned
+no controllable browser, so desktop/mobile visual inspection and a fresh live
+authenticated session could not be performed here. After deployment, compare
+the public paper/figure bytes with the source checkout, confirm anonymous ZIP
+denial, and compare the existing astronomy records with the predeployment
+snapshot. Keep Workers Free; no plan or credential changes are required.
+
+## Historical local bandit preparation (15 October 2026)
+
+The following records the earlier preparation, before the authorized release
+above; its local-only statements are historical.
 
 The `information-optimal-bandits` research checkout now contains one real
 investigation, `PersistentBetting`, with versioned `discovery.json`, the complete
@@ -65,6 +103,7 @@ In `scida-science`, keep these repositories private and active:
 | `GRB180411A_Dust_Echo` | `discovery.json` for `AST-001`                                                                       |
 | `TOI475_Ephemeris_Discrepancy` | `discovery.json` for `AST-002`                                                                       |
 | `TIC233166139_APOGEE_Mass_Ratio` | `discovery.json` for `AST-003`                                                                       |
+| `information-optimal-bandits` | `discovery.json` for `PersistentBetting`; public paper and protected compact reviewer ZIP |
 
 Enable Issues and add the GitHub repository topic `scida-discovery` to each investigation repository. Real records require `illustrative: false`. The prepared records and paper PDFs are public through SciDA; full analysis packages remain reviewer-only. Legacy illustrative repositories are preserved but excluded by the new backend. No accounts, approvals, comments or research examples are seeded.
 
@@ -298,7 +337,7 @@ When editing GitHub files directly, advance `discovery.updatedAt` to an ISO time
 
 ## Local backend development
 
-For UI-only work, keep `.env.local` with a blank API URL; the six bundled examples remain available. For full local integration, use development GitHub App credentials and a controlled installation/repository set. Local Worker calls still write real GitHub records; there is no simulated backend.
+For UI-only work, keep `.env.local` with a blank API URL; the website shows an honest unconfigured state without example discoveries or simulated accounts. For full local integration, use development GitHub App credentials and a controlled installation/repository set. Local Worker calls still write real GitHub records; there is no simulated backend.
 
 Put local secret values in ignored `backend/.dev.vars`, beside the Wrangler configuration. Use the same four secret names as production; quote multiline private-key content or use escaped newlines. Do not put them in the frontend `.env.local`. [Cloudflare local secret instructions](https://developers.cloudflare.com/workers/configuration/secrets/#local-development-with-secrets).
 

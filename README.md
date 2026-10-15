@@ -2,7 +2,9 @@
 
 SciDA presents investigations developed with AI scientific research systems and supports review by research topic. The React, TypeScript and Vite frontend runs on GitHub Pages. A Cloudflare Worker handles GitHub sign-in, authorization and private GitHub storage. This implementation uses no external database, KV or D1 service.
 
-This release integrates three real astronomy investigations, all **Awaiting Validation**, with evidence figures, public papers and protected complete analysis packages. Historical examples are isolated in test fixtures. The production frontend has no example fallback, and the backend excludes illustrative records. GitHub Pages deploys from `main`; private investigation default branches supply the research content, and the matching Worker is deployed separately.
+This release integrates three real astronomy investigations and **Persistent Betting**, all **Awaiting Validation**, with evidence figures, public papers and protected reviewer packages. Historical examples are isolated in test fixtures. The production frontend has no example fallback, and the backend excludes illustrative records. GitHub Pages deploys from `main`; private investigation default branches supply the research content, and the matching Worker is deployed separately.
+
+Persistent Betting uses a repository-backed 13-section brief, mathematical headline and section equations, and a complete public paper. Its compact reviewer ZIP contains paper, analysis and Lean folders and uses the same topic-specific approval checks as the astronomy packages. Research content and reviewer materials remain in the private `information-optimal-bandits` repository; none is bundled into this public website source. See the current release record in [deployment documentation](docs/DEPLOYMENT.md).
 
 Earlier deployment documentation records successful owner/Reader sign-in on 14 October 2026. Those are historical checks, not a fresh verification of reviewer posting or large-package downloads. See [verification and remaining work](#verification-and-remaining-work).
 
@@ -83,7 +85,9 @@ node scripts/validate-discovery.mjs ../SciDA-discoveries/GRB180411A_Dust_Echo ..
 
 Replace the directory arguments if your checkouts are elsewhere. Success prints one line per investigation with figure and traced-claim counts. These local checks need no credentials; access to the private checkouts and ignored archive parts must already have been granted separately. Add `--require-release-assets` before the directories to require uploaded asset IDs for every part. A fresh Git clone contains the small manifests, papers and figures; the large parts must be obtained separately through authorized package access before checking their local hashes.
 
-The content validator currently requires the prepared packages' internal provenance format, non-illustrative records and `status: "Awaiting Validation"`. It is not a general validator for old examples or a future Published release. Update its policy deliberately when the release process changes; do not change a scientific status just to satisfy a test. Passing software checks does not establish scientific validity or novelty.
+The content validator requires non-illustrative records, checks equations for valid KaTeX syntax, and verifies internal provenance manifests when present. It accepts the supported active and archive statuses, with valid decision history for archived records. Do not change a scientific status just to satisfy a test. Passing software checks does not establish scientific validity or novelty.
+
+To include the actual bandit content and material-access integration checks, set `$env:SCIDA_BANDIT_REPOSITORY` to your private `information-optimal-bandits` checkout before running `npm.cmd test`. This reads local files without copying them into the public website repository; GitHub transport and test identities remain isolated fixtures. Normal CI skips these private-content checks when the checkout is unavailable.
 
 ## How repositories supply the site
 
@@ -202,11 +206,11 @@ npm.cmd run dev:backend -- --var FRONTEND_ORIGIN:http://127.0.0.1:5173 --var API
 
 Set the frontend's ignored `.env.local` to `VITE_SCIDA_API_URL=http://127.0.0.1:8787` and start Vite in another terminal. Keep exact origins/ports aligned. An unconfigured Worker reports unavailable services. Authenticated local OAuth was not exercised in this documentation pass.
 
-## Deployment — for a later authorized release
+## Deployment
 
-No deployment commands were executed during this update. Keep the hosting policy at **Workers Free with $0 recurring cost**; do not enable paid plans or chargeable overages as part of setup.
+Deploy through the existing main-branch Pages workflow and the separate Worker command below. The current Persistent Betting release and its checks are recorded in [deployment documentation](docs/DEPLOYMENT.md#persistent-betting-release-15-october-2026). Keep the hosting policy at **Workers Free with $0 recurring cost**; do not enable paid plans or chargeable overages as part of setup.
 
-The website preparation uses `content/astronomy-investigations-20261015`. The three private investigations use `content/astronomy-release-20261015`, preserving the scientific commits and remote ancestry while excluding archive-blob commits. The original complete preparation branches remain local under `content/astronomy-investigations-20261015`; do not push those archive-containing branches. Repository renames preserve their GitHub identities, permissions and history. Default branches remain unchanged, so this staging work does not release the real briefs.
+The earlier astronomy preparation used `content/astronomy-investigations-20261015` in this repository and `content/astronomy-release-20261015` in the three private investigations. Those releases preserved scientific commits and remote ancestry while excluding archive-blob commits. Preserve the original local preparation branches; do not push their large archive blobs. The deployed site now reads real research from private default branches. Repository renames preserve their GitHub identities, permissions and history.
 
 1. Confirm private storage, organization access and App installation. Required App permissions are repository Contents/Issues read-write, Metadata read-only and account email read-only. Use the exact API `/auth/callback`; disable wildcard callbacks and authorization during installation. See [deployment instructions](docs/DEPLOYMENT.md).
 2. Set identifiers and four Worker secrets using the approved local Wrangler/Cloudflare procedure. Secret operations can deploy a Worker version; they are not read-only verification. Keep keys, values and encrypted backups outside public Git history.
@@ -218,6 +222,8 @@ The website preparation uses `content/astronomy-investigations-20261015`. The th
 The organization homepage uses Vite base `/` and `HashRouter`. Detail-page refreshes need no server rewrites. Moving to a project-hosted site requires updating the Vite base and frontend/authentication destinations together.
 
 ## Verification and remaining work
+
+Current bandit-release checks and limitations are recorded in [deployment documentation](docs/DEPLOYMENT.md#persistent-betting-release-15-october-2026). The following astronomy-package observations are retained as historical verification, rather than claims of a fresh scientific replay or live authenticated test.
 
 The integration on **15 October 2026** passed a production build, backend type checks, **316 automated tests including the three opt-in private-content UI checks**, a fresh Worker dry-run build and the packaged workerd fixture check. Package-specific tests cover authorization before any file read, wrong-topic/Reader denial, revocation between files, unsafe manifests, protected release-asset redirects, download checksums and UI handling. These establish specified software behavior, not astronomical validity.
 

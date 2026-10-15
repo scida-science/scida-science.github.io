@@ -2836,13 +2836,43 @@ input[readonly] {
 }
 .brief-section p { white-space: pre-line; }
 .brief-section p + p { margin-top: 1em; }
-.headline-result { margin: 1.5rem 0; min-width: 0; }
+.headline-result { margin: 1.5rem 0; min-width: 0; max-width: 100%; }
 .headline-result .equation { margin-top: 0; }
-.headline-result figcaption { margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6; color: var(--muted); }
-.research-markdown { font: inherit; color: inherit; }
-.research-markdown p { white-space: normal; }
+.headline-result figcaption { margin-top: 0.85rem; font-size: 0.9rem; line-height: 1.8; color: #5c6b57; overflow-wrap: anywhere; }
+.research-markdown { font-size: 15px; line-height: 1.9; color: #5c6b57; }
+.research-markdown p { font: inherit; color: inherit; white-space: normal; margin-bottom: 0.9em; }
+.research-markdown > :last-child { margin-bottom: 0; }
 .research-markdown a { text-decoration: underline; text-underline-offset: 0.2em; }
 .research-markdown code { overflow-wrap: anywhere; }
+.discovery-layout > div,
+.discovery-sidebar { min-width: 0; }
+.equation { min-width: 0; max-width: 100%; overflow-y: hidden; overscroll-behavior-x: contain; }
+.equation .katex-display { width: max-content; min-width: 100%; }
+.equation:focus-visible,
+.discovery-headline:focus-visible { outline: 3px solid #7b9e67; outline-offset: 4px; }
+.discovery-headline { padding: 28px 0 8px; border-bottom: 1px solid var(--border); scroll-margin-top: 25px; }
+.discovery-headline h2 { font-size: 24px; margin-bottom: 18px; }
+.discovery-headline .headline-result { margin-top: 0; }
+.contents-panel { position: sticky; top: 24px; }
+.contents-panel summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 0; cursor: pointer; list-style: none; color: #384f3e; font-size: 14px; font-weight: 600;
+}
+.contents-panel summary::-webkit-details-marker { display: none; }
+.contents-panel summary small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.contents-panel details[open] > summary svg { transform: rotate(180deg); }
+.contents-links { max-height: min(65vh, 38rem); overflow-y: auto; overscroll-behavior-y: contain; padding: 4px 5px; }
+.contents-panel .contents-links button { min-height: 44px; width: 100%; font-size: 12px; padding: 10px 0; overflow-wrap: anywhere; }
+.contents-panel .contents-links button span { flex-shrink: 0; color: var(--muted); min-width: 18px; }
+.contents-panel .contents-links .contents-extra { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 14px; color: var(--green); }
+@media (max-width: 800px) {
+  .contents-panel { display: block; position: static; margin: 0; padding: 0 5px; }
+  .contents-links { max-height: 50vh; }
+}
 @media (max-width: 560px) {
   .headline-result .katex { font-size: 0.95em; }
+  .research-markdown { font-size: 14px; }
+  .contents-panel { margin-top: 18px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .discovery-headline { padding-top: 24px; }
+  .headline-result figcaption { font-size: 13px; }
 }

@@ -130,9 +130,10 @@ describe.skipIf(!sourceDirectories.length)("prepared research content in the web
       for (const section of discovery.sections) {
         expect(screen.getByRole("heading", { name: section.title })).toBeTruthy();
         const rendered = globalThis.document.getElementById(`section-${section.id}`)!;
-        await waitFor(() => expect(rendered.querySelectorAll(".research-markdown p").length).toBeGreaterThan(0));
+        // The lazy Markdown/math chunk may still be compiling in a cold parallel test run.
+        await waitFor(() => expect(rendered.querySelectorAll(".research-markdown p").length).toBeGreaterThan(0), { timeout: 5000 });
         for (const paragraph of section.body.split(/\n\s*\n/).filter((p) => !/[\[\]$`]/.test(p)))
-          await waitFor(() => expect([...rendered.querySelectorAll("p")].some((element) => element.textContent === paragraph)).toBe(true));
+          await waitFor(() => expect([...rendered.querySelectorAll("p")].map((element) => element.textContent)).toContain(paragraph));
         if (section.equation) await waitFor(() => expect(rendered.querySelector(".equation annotation")?.textContent).toBe(section.equation));
         expect(rendered.querySelector(".katex-error")).toBeNull();
       }

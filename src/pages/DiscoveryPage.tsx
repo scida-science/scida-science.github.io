@@ -11,6 +11,7 @@ import {
   Pencil,
   Telescope,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
 import { topics } from "../data/topics";
@@ -258,13 +259,52 @@ function ResearchBrief({ discovery }: { discovery: Discovery }) {
                   </div>
                 }
               >
-                <Equation expression={s.equation} />
+                <Equation expression={s.equation} focusable label={`${s.title}: mathematical result`} />
               </Suspense>
             )}
           </div>
         </section>
       ))}
     </div>
+  );
+}
+function ContentsNavigation({ discovery }: { discovery: Discovery }) {
+  const [open, setOpen] = useState(() =>
+    typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 800px)").matches,
+  );
+  function jumpTo(id: string) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.scrollIntoView({
+      behavior: typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto" : "smooth",
+    });
+    if (!element.hasAttribute("tabindex")) element.tabIndex = -1;
+    element.focus({ preventScroll: true });
+  }
+  return (
+    <nav className="contents-panel" aria-label="On this page">
+      <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+        <summary>
+          <span>In this brief <small>{discovery.sections.length} sections</small></span>
+          <ChevronDown size={17} aria-hidden="true" />
+        </summary>
+        <div className="contents-links" hidden={!open}>
+          {discovery.headlineResult && <button className="contents-extra" type="button" onClick={() => jumpTo("headline-result")}>
+            Headline result
+          </button>}
+          {discovery.sections.map((section, index) => <button key={section.id} type="button" onClick={() => jumpTo(`section-${section.id}`)}>
+            <span>{String(index + 1).padStart(2, "0")}</span>{section.title}
+          </button>)}
+          {!!discovery.statusHistory?.length && <button className="contents-extra" type="button" onClick={() => jumpTo("status-history-heading")}>
+            Status history
+          </button>}
+          <button className="contents-extra" type="button" onClick={() => jumpTo("discussion")}>
+            Research discussion ↓
+          </button>
+        </div>
+      </details>
+    </nav>
   );
 }
 function statusDecisions(discovery: Discovery) {
@@ -393,6 +433,15 @@ export default function DiscoveryPage() {
               {discovery.sections.length} sections · {discovery.version}
             </span>
           </div>
+          {discovery.headlineResult && <section className="discovery-headline" id="headline-result" tabIndex={-1} aria-labelledby="headline-result-heading">
+            <h2 id="headline-result-heading">Headline result</h2>
+            <figure className="headline-result">
+              <Suspense fallback={<p>Loading mathematical result…</p>}>
+                <Equation expression={discovery.headlineResult.equation} focusable label="Headline result equation" />
+              </Suspense>
+              <figcaption>{discovery.headlineResult.caption}</figcaption>
+            </figure>
+          </section>}
           <ResearchBrief discovery={discovery} />
           <div className="validation-callout">
             <span className="eyebrow">
@@ -407,37 +456,7 @@ export default function DiscoveryPage() {
         </div>
         <aside className="discovery-sidebar">
           <Materials key={discovery.id} discovery={discovery} />
-          <nav className="contents-panel" aria-label="On this page">
-            <h3>In this brief</h3>
-            {discovery.sections.map((s, i) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  const element = document.getElementById(`section-${s.id}`);
-                  element?.scrollIntoView({
-                    behavior: window.matchMedia(
-                      "(prefers-reduced-motion: reduce)",
-                    ).matches
-                      ? "auto"
-                      : "smooth",
-                  });
-                  element?.focus({ preventScroll: true });
-                }}
-              >
-                <span>{String(i + 1).padStart(2, "0")}</span>
-                {s.title}
-              </button>
-            ))}
-            <a
-              href="#discussion"
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById("discussion")?.scrollIntoView();
-              }}
-            >
-              Research discussion ↓
-            </a>
-          </nav>
+          <ContentsNavigation key={`contents-${discovery.id}`} discovery={discovery} />
         </aside>
       </div>
     </>

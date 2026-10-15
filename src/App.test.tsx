@@ -193,7 +193,7 @@ describe("Public research and real account interface", () => {
       expect(screen.getByText(figure.caption)).toBeTruthy();
     }
     expect(screen.getAllByRole("link", { name: /Open full-size figure/ })).toHaveLength(3);
-    expect((await screen.findByText("Context from the manuscript.")).tagName).toBe("P");
+    expect((await screen.findByText("Context from the manuscript.", {}, { timeout: 5000 })).tagName).toBe("P");
     expect((await screen.findByText("Limitations from the manuscript.")).tagName).toBe("P");
     expect(screen.queryByText(d.id)).toBeNull();
   });
