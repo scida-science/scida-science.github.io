@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { discoveries as illustrativeFixtures } from '../test/fixtures/discoveries.ts';
 const discoveries = illustrativeFixtures.map((item) => ({ ...item, illustrative: false }));
+// This outcome exists only in the isolated runtime fixture, never in production.
+const archivedFixture = discoveries.at(-1);
+archivedFixture.statusHistory = [{
+  from: archivedFixture.status, to: 'Withdrawn', reason: 'Withdrawn during the isolated runtime verification.',
+  decidedAt: '2026-10-15T00:00:00Z', decidedBy: '100', decidedByName: 'Runtime owner', version: archivedFixture.version,
+}];
+archivedFixture.status = 'Withdrawn';
+archivedFixture.updatedAt = '2026-10-15T00:00:00Z';
 
 const scriptPath = fileURLToPath(new URL('../.worker-dist/index.js', import.meta.url));
 await readFile(scriptPath); // Run npm run build:backend before this check.
@@ -132,6 +140,9 @@ try {
   assert.equal(portal.status, 200, 'Packaged portal must reach GitHub through the Workers native fetch API: ' + body.message);
   assert.equal(body.user, null);
   assert.equal(body.state.discoveries.length, 6);
+  const archivedPublic = body.state.discoveries.find((item) => item.id === archivedFixture.id);
+  assert.equal(archivedPublic.status, 'Withdrawn');
+  assert.deepEqual(archivedPublic.statusHistory, archivedFixture.statusHistory);
   assert.equal(body.state.profiles.length, 0);
   assert.equal(portal.headers.get('Access-Control-Allow-Origin'), bindings.FRONTEND_ORIGIN);
   assert.deepEqual(unexpected, []);
@@ -177,6 +188,9 @@ try {
   assert.equal(user.id, '200');
   assert.equal(user.role, 'Reader');
   assert.deepEqual(user.approvedTopics, []);
+  assert.equal((await post('/v1/discoveries/' + archivedFixture.id, {
+    discovery: { ...archivedPublic, status: 'Awaiting Validation', statusChangeReason: 'A Reader cannot restore this record.' },
+  }, token)).status, 403, 'Readers cannot restore or alter an archived discovery');
   assert.equal((await post('/v1/access/200', { role: 'Senior Approver', assignedTopics: ['bandit-theory'], approvedTopics: [] }, token)).status, 403);
   assert.equal(JSON.stringify(admin).includes('synthetic-github-user-token'), false, 'GitHub user tokens never persist');
   assert.equal(JSON.stringify(admin).includes(token), false, 'Only session hashes persist');
@@ -194,7 +208,7 @@ try {
   assert.equal(failedPortal.status, 503, 'Storage redirects must fail closed');
   assert.equal((await failedPortal.text()).includes('redirect-must-not-be-followed'), false);
   assert.deepEqual(unexpected, [], 'Neither transport follows redirects to another host');
-  console.log('Packaged workerd runtime passed: App RSA JWT, GitHub transport, six discoveries, CORS, OAuth PKCE callback/exchange, Reader restrictions, session revocation, and redirect rejection. All GitHub responses were local fixtures.');
+  console.log('Packaged workerd runtime passed: App RSA JWT, GitHub transport, six discoveries including an archived record and its history, CORS, OAuth PKCE callback/exchange, Reader restrictions, session revocation, and redirect rejection. All GitHub responses were local fixtures.');
 } finally {
   await runtime.dispose();
 }

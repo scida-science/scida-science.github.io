@@ -10,6 +10,10 @@ Sign-in opens **Explore**. **Following** lists the discoveries saved with the Fo
 
 Discussion posts and threaded replies support Markdown: emphasis, headings, lists, links, quotes, fenced code, tables, task lists and LaTeX math (`$x^2$` inline, or `$$` on separate lines for a display equation). **Preview** uses the same renderer as saved comments and does not submit the draft. Markdown source remains in the existing signed GitHub discussion records, with the same topic permissions, manuscript version and 6,000-character limit. Existing comments need no migration. Raw HTML is not executed; unsafe links are blocked, and images appear as links rather than loading remote content. The Markdown renderer loads only when a comment or preview needs it.
 
+**Archive** preserves investigations marked **Not supported**, **Refuted**, or **Withdrawn**. Explore lists active investigations; Archive lists archived investigations with field, outcome and text filters. Following retains archived discoveries already followed. Their stable discovery links, papers, evidence, materials and versioned discussions remain available under the existing access rules. Archiving does not delete content or archive the underlying GitHub repository.
+
+To archive or restore an investigation, sign in as the owner Admin, open its discovery page, choose **Edit discovery**, select the new status and enter a public reason (10–2,000 characters). Every status transition requires an explanation. Restoring uses an active status, such as **Awaiting Validation**, and appends another decision without erasing the earlier outcome. The Worker enforces Admin access and records the reason, previous/new status, server timestamp, Admin identity and manuscript version in `discovery.statusHistory`. It preserves existing history and ignores caller-supplied decisions; stale revisions cannot overwrite newer decisions. Existing active records need no migration. The Archive remains empty until an Admin actually archives a discovery; software tests do not establish any scientific outcome.
+
 ## Repository map
 
 | Location | Purpose |

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { discoveries } from "../test/fixtures/discoveries";
-import type { Discovery, DiscussionComment, ProfileInput } from "../src/types";
+import type { Discovery, DiscussionComment, ProfileInput, StatusDecision } from "../src/types";
+import { MAX_STATUS_DECISIONS } from "../src/services/validation";
 import { createDomain, validDiscoveryDocument } from "./domain";
 import { emptyAdminState, HttpError, validMaterial } from "./model";
 import type {
@@ -138,6 +139,83 @@ beforeEach(() => {
     assignedTopics: ["bandit-theory"],
   };
   domain = createDomain(store, OWNER, "https://api.example.test");
+});
+
+describe("administrator status decisions and archive", () => {
+  const reason = "Independent review does not support the proposed interpretation.";
+  it.each(["Not supported", "Refuted", "Withdrawn"] as const)("records an owner-authored %s outcome without changing protected material access", async (status) => {
+    store.records[0].document.materials.paper = { path: "papers/original.pdf", access: "reviewer" };
+    const originalMaterials = copy(store.records[0].document.materials);
+    const request = { ...editable(), status, statusChangeReason: `  ${reason}  `, statusHistory: [{ decidedBy: READER, decidedAt: "2000-01-01T00:00:00.000Z", reason: "forged" }] };
+    for (const account of [READER, REVIEWER, APPROVER]) await denied(domain.updateDiscovery(account, request));
+    const started = Date.now();
+    await domain.updateDiscovery(OWNER, request);
+    const saved = store.records[0].document.discovery;
+    expect(saved.statusHistory).toHaveLength(1);
+    expect(saved.statusHistory![0]).toMatchObject({ from: discoveries[0].status, to: status, reason, decidedBy: OWNER, decidedByName: "owner", version: saved.version });
+    expect(Date.parse(saved.statusHistory![0].decidedAt)).toBeGreaterThanOrEqual(started);
+    expect(saved.statusHistory![0].decidedAt).toBe(saved.updatedAt);
+    expect(saved).not.toHaveProperty("statusChangeReason");
+    expect(store.records[0].document.materials).toEqual(originalMaterials);
+    await denied(domain.authorizeMaterial(READER, saved.id, "paper"), 404);
+    const publicSaved = (await createDomain(store, OWNER, "https://api.example.test").portal(null)).state.discoveries.find((item) => item.id === saved.id)!;
+    expect(publicSaved.statusHistory).toEqual(saved.statusHistory);
+    expect(publicSaved.materials.paper).toBeNull();
+    expect(publicSaved).not.toHaveProperty("statusChangeReason");
+    publicSaved.statusHistory![0].reason = "Local mutation cannot change the audit record.";
+    expect(saved.statusHistory![0].reason).toBe(reason);
+  });
+
+  it("preserves all original decisions through content edits, caller tampering, and restoration", async () => {
+    await domain.addComment(REVIEWER, comment());
+    await domain.updateDiscovery(OWNER, { ...editable(), status: "Withdrawn", statusChangeReason: reason });
+    const originalHistory = copy(store.records[0].document.discovery.statusHistory);
+    for (const forged of [undefined, [], [{ from: "Withdrawn", to: "Published", decidedBy: READER }]]) {
+      await domain.updateDiscovery(OWNER, { ...editable(), title: "A clarified title", statusHistory: forged, statusChangeReason: "Ignored because the status has not changed." });
+      expect(store.records[0].document.discovery.statusHistory).toEqual(originalHistory);
+    }
+    store.state.profiles[OWNER].profile.fullName = "Updated owner name";
+    await domain.updateDiscovery(OWNER, { ...editable(), version: "v0.3", status: "Awaiting Validation", statusChangeReason: "New evidence warrants reopening the investigation.", statusHistory: [] });
+    const saved = store.records[0].document.discovery;
+    expect(saved.status).toBe("Awaiting Validation");
+    expect(saved.statusHistory).toHaveLength(2);
+    expect(saved.statusHistory![0]).toEqual(originalHistory![0]);
+    expect(saved.statusHistory![1]).toMatchObject({ from: "Withdrawn", to: "Awaiting Validation", decidedBy: OWNER, decidedByName: "Updated owner name", version: "v0.3" });
+    expect(store.discussions["AI-001"]).toHaveLength(1);
+    expect(validDiscoveryDocument(store.records[0].document)).toBe(true);
+  });
+
+  it.each([undefined, null, "short", "          ", "x".repeat(2001)])("requires a bounded substantive reason for every status transition (%s)", async (statusChangeReason) => {
+    await denied(domain.updateDiscovery(OWNER, { ...editable(), status: "Validated", statusChangeReason }), 400);
+    expect(store.records[0].document.discovery.statusHistory).toBeUndefined();
+    expect(store.records[0].sha).toBe("1");
+  });
+
+  it("cannot append an archive or restore decision from stale revisions or a conflicting GitHub write", async () => {
+    const old = editable();
+    store.saveConflict = true;
+    await denied(domain.updateDiscovery(OWNER, { ...old, status: "Refuted", statusChangeReason: reason }), 409);
+    expect(store.records[0].document.discovery.statusHistory).toBeUndefined();
+    // Reset only the isolated fixture's conflict SHA to continue this test.
+    store.records[0].sha = "2";
+    await domain.updateDiscovery(OWNER, { ...editable(), status: "Refuted", statusChangeReason: reason });
+    await denied(domain.updateDiscovery(OWNER, { ...old, status: "Awaiting Validation", statusChangeReason: "New observations would justify a fresh review." }), 409);
+    expect(store.records[0].document.discovery.statusHistory).toHaveLength(1);
+    expect(store.records[0].document.discovery.status).toBe("Refuted");
+  });
+
+  it("rejects new transitions at the history bound without truncating past decisions", async () => {
+    const history: StatusDecision[] = Array.from({ length: MAX_STATUS_DECISIONS }, (_, index) => ({
+      from: index % 2 ? "Withdrawn" : "Awaiting Validation",
+      to: index % 2 ? "Awaiting Validation" : "Withdrawn",
+      reason, decidedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      decidedBy: OWNER, decidedByName: "owner", version: "v0.2",
+    }));
+    store.records[0].document.discovery.statusHistory = history;
+    await denied(domain.updateDiscovery(OWNER, { ...editable(), status: "Withdrawn", statusChangeReason: reason }), 400);
+    await domain.updateDiscovery(OWNER, { ...editable(), title: "A permitted content correction" });
+    expect(store.records[0].document.discovery.statusHistory).toEqual(history);
+  });
 });
 
 describe("private discovery following", () => {

@@ -22,7 +22,7 @@ function RouteFocus() {
   useEffect(() => {
     window.scrollTo(0, 0);
     document.getElementById("main-content")?.focus();
-    document.title = `${pathname.startsWith("/discoveries/") ? "Discovery" : pathname === "/profile" ? "Research profile" : pathname === "/access" ? "Reviewer access" : pathname === "/login" ? "Account" : pathname === "/following" ? "Following" : "Explore"} · SciDA`;
+    document.title = `${pathname.startsWith("/discoveries/") ? "Discovery" : pathname === "/profile" ? "Research profile" : pathname === "/access" ? "Reviewer access" : pathname === "/login" ? "Account" : pathname === "/following" ? "Following" : pathname === "/archive" ? "Archive" : "Explore"} · SciDA`;
   }, [pathname]);
   return null;
 }
@@ -53,6 +53,7 @@ export default function App() {
               Explore
             </NavLink>
             <NavLink to="/following">Following</NavLink>
+            <NavLink to="/archive">Archive</NavLink>
           </nav>
           <div className="account-controls">
             {configured && (
@@ -118,8 +119,9 @@ export default function App() {
       <main id="main-content" className="main-container" tabIndex={-1}>
         <RouteFocus />
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/following" element={<HomePage followingOnly />} />
+          <Route path="/" element={<HomePage key="explore" />} />
+          <Route path="/following" element={<HomePage key="following" followingOnly />} />
+          <Route path="/archive" element={<HomePage key="archive" archiveOnly />} />
           <Route
             path="/discoveries/:id"
             element={<DiscoveryPage key={user?.id ?? "visitor"} />}

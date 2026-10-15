@@ -2,6 +2,7 @@ import type { ApiClient } from "../lib/api";
 import type {
   CommentInput,
   Discovery,
+  DiscoveryUpdate,
   Invitation,
   PortalState,
   Profile,
@@ -105,11 +106,14 @@ export function createPortalRepository(client: ApiClient) {
       client.request<void>("/v1/comments", { input }),
     requestCode: (discoveryId: string, explanation: string) =>
       client.request<void>("/v1/code-requests", { discoveryId, explanation }),
-    updateDiscovery: (discovery: Discovery) =>
-      client.request<void>(
+    updateDiscovery: (discovery: DiscoveryUpdate) => {
+      const input = { ...discovery };
+      delete input.statusHistory;
+      return client.request<void>(
         `/v1/discoveries/${encodeURIComponent(discovery.id)}`,
-        { discovery },
-      ),
+        { discovery: input },
+      );
+    },
     setAccess: (
       userId: string,
       role: Role,

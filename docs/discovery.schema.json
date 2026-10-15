@@ -30,6 +30,24 @@
     }
   },
   "$defs": {
+    "stage": {
+      "enum": ["Awaiting Validation", "Validated", "Published", "Not supported", "Refuted", "Withdrawn"]
+    },
+    "statusDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "reason", "decidedAt", "decidedBy", "decidedByName", "version"],
+      "properties": {
+        "from": { "$ref": "#/$defs/stage" },
+        "to": { "$ref": "#/$defs/stage" },
+        "reason": { "type": "string", "minLength": 10, "maxLength": 2000, "pattern": "\\S[\\s\\S]{8,}\\S" },
+        "decidedAt": { "type": "string", "format": "date-time", "maxLength": 60 },
+        "decidedBy": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
+        "decidedByName": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S" },
+        "version": { "type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S" }
+      },
+      "description": "Server-authored immutable decision. The Worker also checks that from and to differ, the chain begins in an active stage and is continuous, timestamps are chronological, and the final decision matches the current status."
+    },
     "material": {
       "oneOf": [
         {
@@ -289,11 +307,13 @@
           ]
         },
         "status": {
-          "enum": [
-            "Awaiting Validation",
-            "Validated",
-            "Published"
-          ]
+          "$ref": "#/$defs/stage"
+        },
+        "statusHistory": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/statusDecision" },
+          "description": "Append-only decisions recorded by the Worker. Required and nonempty for archived discoveries. Existing active discoveries may omit this field. Never truncate or rewrite existing decisions."
         },
         "summary": {
           "type": "string",
@@ -357,6 +377,10 @@
         }
       },
       "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["Not supported", "Refuted", "Withdrawn"] } } },
+          "then": { "required": ["statusHistory"], "properties": { "statusHistory": { "minItems": 1 } } }
+        },
         {
           "if": {
             "properties": {

@@ -1,5 +1,8 @@
-import { ArrowUpRight, Orbit } from "lucide-react";
+import { Archive, ArrowUpRight, Orbit } from "lucide-react";
+import { isArchived } from "../data/discoveryStages";
 import type { Stage } from "../types";
+
+export { stages } from "../data/discoveryStages";
 
 export function Brand() {
   return (
@@ -21,7 +24,7 @@ export function StatusBadge({ status }: { status: Stage }) {
     <span
       className={`status-badge status-${status.toLowerCase().replaceAll(" ", "-")}`}
     >
-      <span className="status-dot" />
+      {isArchived(status) ? <Archive size={12} aria-hidden="true" /> : <span className="status-dot" />}
       {status}
     </span>
   );
@@ -37,8 +40,3 @@ export function formatDate(value: string) {
     timeZone: "UTC",
   }).format(new Date(value));
 }
-export const stages: Stage[] = [
-  "Awaiting Validation",
-  "Validated",
-  "Published",
-];

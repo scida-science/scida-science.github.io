@@ -146,7 +146,11 @@ if (typeof configured === "boolean") {
         assert(!ids.has(discovery.id));
         ids.add(discovery.id);
         assert(["Astronomy", "Artificial Intelligence"].includes(discovery.field));
-        assert(["Awaiting Validation", "Validated", "Published"].includes(discovery.status));
+        assert(["Awaiting Validation", "Validated", "Published", "Not supported", "Refuted", "Withdrawn"].includes(discovery.status));
+        if (["Not supported", "Refuted", "Withdrawn"].includes(discovery.status)) {
+          assert(Array.isArray(discovery.statusHistory) && discovery.statusHistory.length > 0);
+          assert.equal(discovery.statusHistory.at(-1).to, discovery.status);
+        }
         assert(Number.isFinite(Date.parse(discovery.updatedAt)));
         exactKeys(discovery.materials, ["paper", "appendix", "figures", "data", "repository"]);
         for (const [kind, value] of Object.entries(discovery.materials)) {

@@ -1,4 +1,5 @@
-import type { Discovery, Field, ProfileInput, Role, TopicId } from "../types";
+import type { Discovery, DiscoveryUpdate, Field, ProfileInput, Role, Stage, StatusDecision, TopicId } from "../types";
+import { isArchived, stages } from "../data/discoveryStages";
 
 export const topicIds: TopicId[] = [
   "bandit-theory",
@@ -10,7 +11,6 @@ export const topicIds: TopicId[] = [
 ];
 export const roles: Role[] = ["Reader", "Reviewer", "Approver", "Senior Approver", "Admin"];
 const fields: Field[] = ["Astronomy", "Artificial Intelligence"];
-const stages = ["Awaiting Validation", "Validated", "Published"];
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 const text = (value: unknown, max = 10000): value is string =>
@@ -89,6 +89,43 @@ export function cleanProfile(input: ProfileInput): ProfileInput {
   };
 }
 
+export const MAX_STATUS_DECISIONS = 100;
+const statusDecisionKeys = ["from", "to", "reason", "decidedAt", "decidedBy", "decidedByName", "version"];
+const decisionTime = (value: unknown): value is string =>
+  text(value, 60) &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+  Number.isFinite(Date.parse(value)) &&
+  new Date(`${value.slice(0, 10)}T00:00:00Z`).toISOString().slice(0, 10) === value.slice(0, 10);
+export function validStatusHistory(value: unknown, status: Stage): value is StatusDecision[] | undefined {
+  if (value === undefined) return !isArchived(status);
+  if (!Array.isArray(value) || value.length > MAX_STATUS_DECISIONS) return false;
+  if (!value.length) return !isArchived(status);
+  return value.every((decision, index) =>
+    object(decision) && Object.keys(decision).every((key) => statusDecisionKeys.includes(key)) &&
+    stages.includes(decision.from as Stage) && stages.includes(decision.to as Stage) &&
+    decision.from !== decision.to &&
+    text(decision.reason, 2000) && decision.reason.trim().length >= 10 &&
+    decisionTime(decision.decidedAt) &&
+    typeof decision.decidedBy === "string" && /^[1-9][0-9]{0,19}$/.test(decision.decidedBy) &&
+    nonempty(decision.decidedByName, 120) && nonempty(decision.version, 40) &&
+    (index === 0 ? !isArchived(decision.from as Stage) :
+      decision.from === value[index - 1].to && Date.parse(decision.decidedAt) >= Date.parse(value[index - 1].decidedAt)),
+  ) && value[value.length - 1].to === status;
+}
+
+/** A pending status change carries a reason, not a browser-authored audit entry. */
+export function discoveryUpdateError(input: DiscoveryUpdate, current: Discovery): string | null {
+  if (!stages.includes(input.status) || !validDiscovery({ ...input, status: current.status, statusHistory: current.statusHistory }))
+    return "Complete all discovery fields before saving.";
+  if (input.status !== current.status) {
+    if (!text(input.statusChangeReason, 2000) || input.statusChangeReason.trim().length < 10)
+      return "Explain the status change in 10–2,000 characters.";
+    if ((current.statusHistory?.length ?? 0) >= MAX_STATUS_DECISIONS)
+      return "This discovery has reached its status history limit. Contact the administrator before changing its status.";
+  }
+  return null;
+}
+
 export function validDiscovery(value: unknown): value is Discovery {
   if (!object(value)) return false;
   return (
@@ -96,7 +133,8 @@ export function validDiscovery(value: unknown): value is Discovery {
     nonempty(value.title, 250) &&
     fields.includes(value.field as Field) &&
     topicIds.includes(value.topic as TopicId) &&
-    stages.includes(value.status as string) &&
+    stages.includes(value.status as Stage) &&
+    validStatusHistory(value.statusHistory, value.status as Stage) &&
     nonempty(value.summary, 3000) &&
     (value.question === undefined || nonempty(value.question, 500)) &&
     validEvidence(value) &&

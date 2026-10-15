@@ -305,6 +305,7 @@ it("allows owner edits with the original revision and denies a Reader or stale f
     ...original,
     title: "Updated illustrative title",
     status: "Validated",
+    statusChangeReason: "Independent checks support the stated result.",
   });
   const saved = (await owner.read()).state.discoveries.find(
     (d) => d.id === "AI-001",

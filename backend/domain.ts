@@ -6,6 +6,7 @@ import type {
   PortalState,
   Profile,
   ProfileInput,
+  StatusDecision,
   TopicId,
 } from "../src/types";
 import {
@@ -14,6 +15,7 @@ import {
   validDiscovery,
   validTopics,
   topicIds,
+  MAX_STATUS_DECISIONS,
 } from "../src/services/validation";
 import { HttpError, materialKinds, object, validMaterial } from "./model";
 import type {
@@ -47,6 +49,11 @@ const owns = (record: object, key: string) =>
 const sameTopics = (a: TopicId[], b: TopicId[]) =>
   a.length === b.length && a.every((topic) => b.includes(topic));
 const clone = <T>(value: T): T => structuredClone(value);
+const publicStatusHistory = (history: StatusDecision[]): StatusDecision[] => history.map((decision) => ({
+  from: decision.from, to: decision.to, reason: decision.reason,
+  decidedAt: decision.decidedAt, decidedBy: decision.decidedBy,
+  decidedByName: decision.decidedByName, version: decision.version,
+}));
 const followedIds = (value: unknown): string[] =>
   Array.isArray(value)
     ? [...new Set(value.filter((item): item is string =>
@@ -299,6 +306,7 @@ export function createDomain(
             field: source.field,
             topic: source.topic,
             status: source.status,
+            ...(source.statusHistory === undefined ? {} : { statusHistory: publicStatusHistory(source.statusHistory) }),
             summary: source.summary,
             ...(source.question === undefined ? {} : { question: source.question }),
             ...(source.headlineFigureId === undefined ? {} : { headlineFigureId: source.headlineFigureId }),
@@ -671,14 +679,33 @@ export function createDomain(
           409,
           "The discovery changed after this form was opened. Refresh before editing again.",
         );
+      const previous = record.document.discovery;
+      const changedStatus = input.status !== previous.status;
+      const statusHistory = previous.statusHistory === undefined ? undefined : clone(previous.statusHistory);
+      const decidedAt = iso();
+      if (changedStatus) {
+        if (!string(input.statusChangeReason, 2000, 10))
+          bad("Explain the status change in 10–2,000 characters.");
+        if ((statusHistory?.length ?? 0) >= MAX_STATUS_DECISIONS)
+          bad("This discovery has reached its status history limit. Existing decisions cannot be discarded.");
+      }
       // Material permissions and repository paths are owner-managed metadata.
       // Browser display URLs are never written back into that configuration.
       const candidate = {
         ...input,
+        statusHistory: changedStatus ? [...(statusHistory ?? []), {
+          from: previous.status,
+          to: input.status,
+          reason: (input.statusChangeReason as string).trim(),
+          decidedAt,
+          decidedBy: current.id,
+          decidedByName: current.fullName,
+          version: input.version,
+        }] : statusHistory,
         figures: clone(record.document.discovery.figures),
         headlineFigureId: record.document.discovery.headlineFigureId,
         materials: clone(record.document.discovery.materials),
-        updatedAt: iso(),
+        updatedAt: decidedAt,
       } as unknown as Discovery;
       const document: DiscoveryDocument = {
         ...clone(record.document),
@@ -692,6 +719,7 @@ export function createDomain(
         field: candidate.field,
         topic: candidate.topic,
         status: candidate.status,
+        ...(candidate.statusHistory === undefined ? {} : { statusHistory: publicStatusHistory(candidate.statusHistory) }),
         summary: candidate.summary,
         ...(candidate.question === undefined ? {} : { question: candidate.question }),
         ...(candidate.headlineFigureId === undefined ? {} : { headlineFigureId: candidate.headlineFigureId }),

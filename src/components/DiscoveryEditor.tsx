@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { usePortal } from "../state/PortalContext";
 import { topics } from "../data/topics";
-import { stages } from "./Ui";
-import type { Discovery, Stage, TopicId } from "../types";
+import { activeStages, archiveStages } from "../data/discoveryStages";
+import type { Discovery, DiscoveryUpdate, Stage, TopicId } from "../types";
 
 export default function DiscoveryEditor({
   discovery,
@@ -11,12 +11,17 @@ export default function DiscoveryEditor({
   discovery: Discovery;
   onClose: () => void;
 }) {
-  const { updateDiscovery } = usePortal();
+  const { updateDiscovery, user } = usePortal();
   const [draft, setDraft] = useState<Discovery>(structuredClone(discovery));
+  const [initialStatus] = useState(discovery.status);
+  const [statusChangeReason, setStatusChangeReason] = useState("");
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const reasonHelpId = useId();
+  const statusChanged = draft.status !== initialStatus;
   const set = <K extends keyof Discovery>(key: K, value: Discovery[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
+  if (user?.role !== "Admin") return null;
   return (
     <section className="panel editor-panel">
       <div className="section-heading">
@@ -34,11 +39,27 @@ export default function DiscoveryEditor({
         className="form-grid"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (pending) return;
+          const reason = statusChangeReason.trim();
+          if (statusChanged && (reason.length < 10 || reason.length > 2000)) {
+            setMessage("Provide a reason for the status change between 10 and 2,000 characters.");
+            return;
+          }
           setPending(true);
-          const result = await updateDiscovery(draft);
-          setPending(false);
-          setMessage(result.message);
-          if (result.ok) onClose();
+          setMessage("");
+          try {
+            const update: DiscoveryUpdate = { ...draft };
+            // Status history belongs to the server; submit only the new reason.
+            delete update.statusHistory;
+            if (statusChanged) update.statusChangeReason = reason;
+            const result = await updateDiscovery(update);
+            setMessage(result.message);
+            if (result.ok) onClose();
+          } catch {
+            setMessage("The discovery could not be saved. Please try again.");
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <label className="field field-full">
@@ -56,9 +77,12 @@ export default function DiscoveryEditor({
             value={draft.status}
             onChange={(e) => set("status", e.target.value as Stage)}
           >
-            {stages.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
+            <optgroup label="Active stages">
+              {activeStages.map((s) => <option key={s}>{s}</option>)}
+            </optgroup>
+            <optgroup label="Archive outcomes">
+              {archiveStages.map((s) => <option key={s}>{s}</option>)}
+            </optgroup>
           </select>
         </label>
         <label className="field">
@@ -70,6 +94,28 @@ export default function DiscoveryEditor({
             onChange={(e) => set("version", e.target.value)}
           />
         </label>
+        <p className="status-change-note muted field-full">
+          Archiving preserves the research brief, materials, and discussion. To
+          restore an investigation, choose an active stage and explain the change.
+        </p>
+        {statusChanged && (
+          <div className="field field-full">
+            <label htmlFor={`${reasonHelpId}-input`}>Reason for status change</label>
+            <textarea
+              id={`${reasonHelpId}-input`}
+              rows={3}
+              required
+              minLength={10}
+              maxLength={2000}
+              value={statusChangeReason}
+              onChange={(e) => setStatusChangeReason(e.target.value)}
+              aria-describedby={reasonHelpId}
+            />
+            <small className="status-change-note" id={reasonHelpId}>
+              Visible to all readers in the status history. Use 10–2,000 characters.
+            </small>
+          </div>
+        )}
         <label className="field field-full">
           Research topic
           <select
@@ -205,7 +251,7 @@ export default function DiscoveryEditor({
             {pending ? "Saving…" : "Save discovery"}
           </button>
           {message && (
-            <p className="notice" role="status">
+            <p className="notice notice-error" role="alert">
               {message}
             </p>
           )}

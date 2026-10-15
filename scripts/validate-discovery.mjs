@@ -93,7 +93,7 @@ for (const target of targets) {
       if (digest(await checkedFile(evidence.path)) !== evidence.sha256) throw new Error(`Claim evidence mismatch: ${claim.id}`);
     }
   }
-  if (doc.discovery.illustrative || doc.discovery.status !== "Awaiting Validation")
-    throw new Error("This preparation requires real investigations awaiting validation");
+  if (doc.discovery.illustrative)
+    throw new Error("Production preparation requires real investigations");
   console.log(`${doc.discovery.id}: schema, semantic links, ${doc.discovery.figures?.length ?? 0} PNGs, materials and ${claims.claims.length} traced claims passed`);
 }

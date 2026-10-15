@@ -94,17 +94,18 @@ afterEach(() => {
 });
 
 describe("Public research and real account interface", () => {
-  it("keeps Explore and Following as the primary navigation for visitors and researchers", () => {
+  it("offers Explore, Following and Archive navigation to visitors and researchers", () => {
     const view = openApp();
     const navigation = screen.getByRole("navigation", { name: "Main navigation" });
-    expect(within(navigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Explore", "Following"]);
+    expect(within(navigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Explore", "Following", "Archive"]);
     expect(within(navigation).getByRole("link", { name: "Explore" }).getAttribute("href")).toBe("/");
     expect(within(navigation).getByRole("link", { name: "Following" }).getAttribute("href")).toBe("/following");
+    expect(within(navigation).getByRole("link", { name: "Archive" }).getAttribute("href")).toBe("/archive");
     expect(screen.queryByRole("button", { name: /Account menu/ })).toBeNull();
     view.unmount();
     signedIn();
     openApp();
-    expect(within(screen.getByRole("navigation", { name: "Main navigation" })).getAllByRole("link")).toHaveLength(2);
+    expect(within(screen.getByRole("navigation", { name: "Main navigation" })).getAllByRole("link")).toHaveLength(3);
     const trigger = screen.getByRole("button", { name: "Account menu for Test Researcher" });
     expect(trigger.textContent).toContain("Test Researcher");
     expect(trigger.textContent).toContain("Reader");
@@ -274,6 +275,27 @@ describe("Public research and real account interface", () => {
       </HashRouter>,
     );
     expect(window.location.hash).toBe("#/discoveries/AST-003");
+    expect(screen.getAllByText("Not uploaded yet")).toHaveLength(5);
+  });
+
+  it("restores the Archive route and preserves archived discovery links after a refresh", async () => {
+    const discovery = portal.state.discoveries.find((item) => item.id === "AST-003")!;
+    discovery.statusHistory = [{
+      from: discovery.status, to: "Withdrawn", reason: "The owner withdrew this test investigation after review.",
+      decidedAt: "2026-10-15T12:00:00Z", decidedBy: "89913681", decidedByName: "Test owner", version: discovery.version,
+    }];
+    discovery.status = "Withdrawn";
+    window.history.replaceState(null, "", "/#/archive");
+    const view = render(<HashRouter><App /></HashRouter>);
+    expect(screen.getByRole("heading", { level: 1, name: "Archive" })).toBeTruthy();
+    expect(within(screen.getByRole("tabpanel")).getAllByRole("article")).toHaveLength(1);
+    await userEvent.setup().click(within(screen.getByRole("tabpanel")).getByRole("link", { name: new RegExp(discovery.title) }));
+    expect(window.location.hash).toBe("#/discoveries/AST-003");
+    view.unmount();
+    render(<HashRouter><App /></HashRouter>);
+    expect(screen.getByRole("heading", { level: 1, name: discovery.title })).toBeTruthy();
+    expect(screen.getAllByText("Withdrawn").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: /Research discussion/ })).toBeTruthy();
     expect(screen.getAllByText("Not uploaded yet")).toHaveLength(5);
   });
 
@@ -1080,7 +1102,7 @@ describe("Public research and real account interface", () => {
         revision: "original-blob-sha",
       }),
     );
-    expect(screen.getByRole("status").textContent).toBe(
+    expect(screen.getByRole("alert").textContent).toBe(
       "The discovery changed on GitHub. Refresh before editing again.",
     );
     expect(

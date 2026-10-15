@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
 import { topics } from "../data/topics";
+import { archiveDescriptions, isArchived } from "../data/discoveryStages";
 import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
@@ -260,6 +261,49 @@ function ResearchBrief({ discovery }: { discovery: Discovery }) {
     </div>
   );
 }
+function statusDecisions(discovery: Discovery) {
+  return [...(discovery.statusHistory ?? [])].reverse()
+    .sort((a, b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
+}
+function ArchiveNotice({ discovery }: { discovery: Discovery }) {
+  if (!isArchived(discovery.status)) return null;
+  const latest = statusDecisions(discovery)[0];
+  return (
+    <section className="archive-notice" aria-labelledby="archive-outcome">
+      <span className="eyebrow">Archived investigation</span>
+      <h2 id="archive-outcome">{discovery.status}</h2>
+      <p>{archiveDescriptions[discovery.status]}</p>
+      {latest?.to === discovery.status ? <>
+        <p className="decision-reason">{latest.reason}</p>
+        <p className="muted">
+          <time dateTime={latest.decidedAt}>{formatDate(latest.decidedAt)}</time>
+          {" · "}{latest.decidedByName}{" · "}{latest.version}
+        </p>
+      </> : <p className="muted">No status-change explanation has been recorded.</p>}
+    </section>
+  );
+}
+function StatusHistory({ discovery }: { discovery: Discovery }) {
+  const decisions = statusDecisions(discovery);
+  if (!decisions.length) return null;
+  return (
+    <section className="decision-history" aria-labelledby="status-history-heading">
+      <h2 id="status-history-heading">Status history</h2>
+      <ol aria-label="Status decisions, newest first">
+        {decisions.map((decision, index) => (
+          <li key={`${decision.decidedAt}-${index}`}>
+            <h3>{decision.from}{" → "}{decision.to}</h3>
+            <p className="decision-reason">{decision.reason}</p>
+            <p className="muted">
+              <time dateTime={decision.decidedAt}>{formatDate(decision.decidedAt)}</time>
+              {" · "}{decision.decidedByName}{" · "}{decision.version}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 export default function DiscoveryPage() {
   const { id } = useParams();
   const { state, user, loading, error } = usePortal();
@@ -290,9 +334,9 @@ export default function DiscoveryPage() {
   return (
     <>
       <div className="discovery-breadcrumb">
-        <Link to="/">
+        <Link to={isArchived(discovery.status) ? "/archive" : "/"}>
           <ArrowLeft size={16} />
-          All discoveries
+          {isArchived(discovery.status) ? "Archive" : "All discoveries"}
         </Link>
       </div>
       <header className="discovery-header">
@@ -327,7 +371,8 @@ export default function DiscoveryPage() {
           )}
         </div>
       </header>
-      {editing && (
+      <ArchiveNotice discovery={discovery} />
+      {editing && user?.role === "Admin" && (
         <DiscoveryEditor
           key={discovery.id}
           discovery={discovery}
@@ -351,6 +396,7 @@ export default function DiscoveryPage() {
             </span>
             <p>{discovery.reviewNote}</p>
           </div>
+          <StatusHistory discovery={discovery} />
           <Discussion key={discovery.id} discovery={discovery} />
         </div>
         <aside className="discovery-sidebar">

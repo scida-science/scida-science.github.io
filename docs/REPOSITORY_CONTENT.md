@@ -1,8 +1,8 @@
 # Repository-backed investigation content
 
-The existing `discovery.json` v1 contract now has three optional fields inside
-`discovery`: `question`, `headlineFigureId` and `figures`. Existing repositories
-without these fields continue to render. The schema is
+The `discovery.json` v1 contract supports optional `question`,
+`headlineFigureId`, `figures` and `statusHistory` fields inside `discovery`.
+Existing active repositories without these fields continue to render. The schema is
 [discovery.schema.json](discovery.schema.json).
 
 ## Placement
@@ -42,6 +42,35 @@ Keep named contributions faithful to the manuscript or another documented
 record. Missing disclosures should remain explicit. Code requests use the
 existing sign-in and administrator workflow; submitting one does not grant
 access or establish an open-source license.
+
+## Archive and decision history
+
+Active statuses are `Awaiting Validation`, `Validated`, and `Published`.
+Archived outcomes are `Not supported` (insufficient supporting evidence),
+`Refuted` (evidence demonstrates the claim is incorrect), and `Withdrawn`
+(an investigation withdrawn with an explanation). The website separates these
+records into Archive while retaining their stable IDs, full briefs, supporting
+materials, discussion and follow preferences. Material access and topic review
+permissions remain unchanged; do not use GitHub's repository-archive switch for
+this workflow, because SciDA must still read and update the investigation.
+
+Only the verified owner Admin can change status through SciDA. The editor sends
+the requested status and a `statusChangeReason` (10–2,000 characters); this is
+an API input, not a field to store in `discovery.json`. The Worker appends a
+decision to `discovery.statusHistory`, recording `from`, `to`, `reason`,
+`decidedAt`, `decidedBy` (numeric GitHub user ID), `decidedByName`, and `version`.
+Decisions and reasons are public wherever the brief is visible, so they must
+not contain private correspondence or personal contact details.
+
+History is chronological, continuous and append-only through the API. The last
+decision's `to` matches the current status. Archived records require a valid
+history; legacy active records may omit it. A restoration appends another
+decision with an active destination status and a new explanation. Browser
+submissions cannot forge, replace or remove earlier decisions. At 100 retained
+decisions, further status transitions are rejected rather than truncating the
+record; content edits remain available. GitHub revision checks prevent stale
+forms from overwriting a concurrent edit. Repository owners can still edit files
+directly on GitHub, so this is not a tamper-proof external audit ledger.
 
 The content-preparation validator uses the JSON Schema and the Worker's runtime
 checks, verifies relative asset/material paths, PNG signatures and file hashes,

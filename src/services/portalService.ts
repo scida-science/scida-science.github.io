@@ -4,6 +4,7 @@ import type {
   ActionResult,
   CommentInput,
   Discovery,
+  DiscoveryUpdate,
   Invitation,
   PortalState,
   Profile,
@@ -26,7 +27,7 @@ import {
 import {
   cleanProfile,
   profileError,
-  validDiscovery,
+  discoveryUpdateError,
   validTopics,
 } from "./validation";
 
@@ -435,17 +436,17 @@ export function createPortalService(
         "Code request recorded for the site administrator.",
       );
     },
-    updateDiscovery(discovery: Discovery): Promise<ActionResult> {
+    updateDiscovery(discovery: DiscoveryUpdate): Promise<ActionResult> {
       if (snapshot.user?.role !== "Admin")
         return Promise.resolve(
           fail(
             "Only the administrator can edit discoveries or change their status.",
           ),
         );
-      if (!validDiscovery(discovery))
-        return Promise.resolve(
-          fail("Complete all discovery fields before saving."),
-        );
+      const current = snapshot.state.discoveries.find((item) => item.id === discovery.id);
+      if (!current) return Promise.resolve(fail("Refresh the discovery before editing."));
+      const error = discoveryUpdateError(discovery, current);
+      if (error) return Promise.resolve(fail(error));
       return mutate(
         (repository) => repository.updateDiscovery(discovery),
         "Discovery updated.",

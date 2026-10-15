@@ -110,6 +110,31 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("status update submission", () => {
+  it("accepts a pending archive decision and sends its reason without a client-authored history", async () => {
+    const { service, routes } = setup({ role: "Admin" });
+    const writes: Record<string, unknown>[] = [];
+    routes.set(`/v1/discoveries/${discoveries[0].id}`, (init) => {
+      writes.push(JSON.parse(init.body as string).discovery);
+      return json({ ok: true });
+    });
+    await service.start();
+    const result = await service.actions.updateDiscovery({ ...discoveries[0], status: "Withdrawn", statusChangeReason: "The original claim requires additional independent checks." });
+    expect(result.ok).toBe(true);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ status: "Withdrawn", statusChangeReason: "The original claim requires additional independent checks." });
+    expect(writes[0]).not.toHaveProperty("statusHistory");
+  });
+  it("rejects a missing reason before sending a status update", async () => {
+    const { service, fetcher } = setup({ role: "Admin" });
+    await service.start();
+    const result = await service.actions.updateDiscovery({ ...discoveries[0], status: "Refuted" });
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("10–2,000");
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith(`/v1/discoveries/${discoveries[0].id}`))).toBe(false);
+  });
+});
+
 describe("Persisted discovery following", () => {
   it("saves the explicit follow state and refreshes it from shared storage", async () => {
     const { service, routes, setProfile } = setup();
@@ -679,6 +704,33 @@ describe("permission and session boundaries", () => {
 });
 
 describe("shared writes and authorized materials", () => {
+  it("requires an explanation for an Admin status change before sending an update", async () => {
+    const { service, fetcher } = setup({ role: "Admin" });
+    await service.start();
+    const draft = { ...discoveries[0], status: "Not supported" as const };
+    expect((await service.actions.updateDiscovery(draft)).ok).toBe(false);
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith(`/v1/discoveries/${draft.id}`))).toBe(false);
+    expect((await service.actions.updateDiscovery({ ...draft, statusChangeReason: "Review found insufficient supporting evidence." })).ok).toBe(true);
+    const update = fetcher.mock.calls.find(([url]) => String(url).endsWith(`/v1/discoveries/${draft.id}`))!;
+    expect(JSON.parse(update[1]?.body as string).discovery).toMatchObject({ status: "Not supported", statusChangeReason: "Review found insufficient supporting evidence." });
+  });
+
+  it("restores archived records without requiring or transmitting browser-authored history", async () => {
+    const { service, routes, fetcher } = setup({ role: "Admin" });
+    const archived = { ...discoveries[0], illustrative: false, status: "Withdrawn" as const, statusHistory: [{
+      from: discoveries[0].status, to: "Withdrawn" as const, reason: "Withdrawn pending further observations.",
+      decidedAt: "2026-10-15T00:00:00Z", decidedBy: "89913681", decidedByName: "Owner", version: discoveries[0].version,
+    }] };
+    routes.set("/v1/portal", () => json({ state: { ...emptyPortalState(), discoveries: [archived], profiles: [profile("Admin")] }, user: profile("Admin") }));
+    await service.start();
+    const draft = { ...archived, status: "Awaiting Validation" as const, statusChangeReason: "New observations are ready for independent review." };
+    delete (draft as Partial<typeof draft>).statusHistory;
+    expect((await service.actions.updateDiscovery(draft)).ok).toBe(true);
+    const update = fetcher.mock.calls.find(([url]) => String(url).endsWith(`/v1/discoveries/${draft.id}`))!;
+    expect(JSON.parse(update[1]?.body as string).discovery).not.toHaveProperty("statusHistory");
+    expect(JSON.parse(update[1]?.body as string).discovery.status).toBe("Awaiting Validation");
+  });
+
   it("saves only verified package bytes using the existing authenticated endpoint", async () => {
     const { service, routes, download, fetcher } = setup({ role: "Reviewer" });
     const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");

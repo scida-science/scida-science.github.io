@@ -1,5 +1,16 @@
 export type Field = "Astronomy" | "Artificial Intelligence";
-export type Stage = "Awaiting Validation" | "Validated" | "Published";
+export type ActiveStage = "Awaiting Validation" | "Validated" | "Published";
+export type ArchiveOutcome = "Not supported" | "Refuted" | "Withdrawn";
+export type Stage = ActiveStage | ArchiveOutcome;
+export interface StatusDecision {
+  from: Stage;
+  to: Stage;
+  reason: string;
+  decidedAt: string;
+  decidedBy: string;
+  decidedByName: string;
+  version: string;
+}
 export type Role = "Reader" | "Reviewer" | "Approver" | "Senior Approver" | "Admin";
 export type TopicId =
   | "bandit-theory"
@@ -32,6 +43,8 @@ export interface Discovery {
   field: Field;
   topic: TopicId;
   status: Stage;
+  /** Append-only decisions recorded by the backend; never edited by the browser. */
+  statusHistory?: StatusDecision[];
   summary: string;
   updatedAt: string;
   version: string;
@@ -45,6 +58,7 @@ export interface Discovery {
     repository: string | null;
   };
 }
+export type DiscoveryUpdate = Discovery & { statusChangeReason?: string };
 export interface EvidenceFigure {
   id: string;
   /** Repository-relative PNG, served through the authorized evidence endpoint. */
