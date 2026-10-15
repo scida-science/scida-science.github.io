@@ -35,6 +35,37 @@ the public paper/figure bytes with the source checkout, confirm anonymous ZIP
 denial, and compare the existing astronomy records with the predeployment
 snapshot. Keep Workers Free; no plan or credential changes are required.
 
+Publication completed through [Pages run 38670663113](https://github.com/scida-science/scida-science.github.io/actions/runs/38670663113)
+and Worker version `a902669c-609c-4597-9194-7be71a3503a6`. Research commit
+`257b5298f16535dc276f3c873ddb56e99698c9d0` is pushed to the private repository's
+`main` and preparation branch. The live page is
+**https://scida-science.github.io/#/discoveries/PersistentBetting**.
+
+Post-publication HTTP checks returned exactly four real records, with all 13
+bandit sections matching the private source. The three astronomy records and
+their existing discussion entries were unchanged. The public PDF (227,508
+bytes) and figure (198,806 bytes) matched source SHA-256 checksums. All 25 tested
+JavaScript, CSS and WOFF2 font assets matched the live website. Anonymous ZIP
+requests returned 404; invalid sessions and anonymous code submissions returned
+401 without exposing material bytes or creating requests. The private
+administrative state revision was unchanged by these checks.
+
+The live OAuth start endpoint returned the expected GitHub authorization
+redirect, callback, PKCE challenge and protected cookie. This checks initiation,
+not completed sign-in. The pushed reviewer ZIP was downloaded through actual
+authenticated GitHub access and matched all 1,257,494 source bytes (SHA-256
+`8a356dabbe8eb13e16696a1d1003c8026dc9a829e172ddb3d1449cb761aec87c`);
+this is not a real SciDA reviewer-session download. The existing code-request
+and approved/wrong-topic/revoked download flows passed isolated integration
+checks. No production approvals were added for testing.
+
+The Lean correction changes 15 module headers only; every byte outside those
+headers was compared with `f5143e8`. The paper and figure are unchanged. The
+recorded proof audit reused matching artifacts and was not a clean rebuild.
+The corrected comments are included in the rebuilt, checksum-verified portable
+package; no fresh proof rebuild is claimed. An extra audit-only attempt was
+stopped incomplete and is not counted as a passed check.
+
 ## Historical local bandit preparation (15 October 2026)
 
 The following records the earlier preparation, before the authorized release
