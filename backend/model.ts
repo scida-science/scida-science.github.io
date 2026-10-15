@@ -30,6 +30,10 @@ export interface AccessRecord {
   approvedTopics: TopicId[];
   assignedTopics: TopicId[];
 }
+/** Read compatibility only. New API assignments use AccessRecord's current roles. */
+export interface LegacyAccessRecord extends Omit<AccessRecord, "role"> {
+  role: "Approver" | "Senior Approver";
+}
 export interface SessionRecord {
   userId: string;
   expiresAt: string;
@@ -58,7 +62,7 @@ export interface AuditRecord {
 export interface AdminState {
   schemaVersion: 1;
   profiles: Record<string, ProfileRecord>;
-  access: Record<string, AccessRecord>;
+  access: Record<string, AccessRecord | LegacyAccessRecord>;
   applications: ReviewerApplication[];
   invitations: StoredInvitation[];
   codeRequests: CodeRequest[];

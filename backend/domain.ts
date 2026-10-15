@@ -18,6 +18,7 @@ import {
   MAX_STATUS_DECISIONS,
 } from "../src/services/validation";
 import { HttpError, materialKinds, object, validMaterial } from "./model";
+import { normalizeAccessRecord } from "./accessRoles";
 import type {
   AdminState,
   AccessRecord,
@@ -137,15 +138,13 @@ export function createDomain(
     if (!numericId(userId) || !owns(state.profiles, userId))
       throw new HttpError(401, "Sign in again to continue.");
     const record = state.profiles[userId];
-    const access = owns(state.access, userId)
+    const access = normalizeAccessRecord(owns(state.access, userId)
       ? state.access[userId]
-      : undefined;
+      : undefined);
     const role =
       userId === adminId
         ? "Admin"
-        : access && ["Reviewer", "Approver", "Senior Approver"].includes(access.role)
-          ? access.role
-          : "Reader";
+        : access.role;
     const result: Profile = {
       ...clone(record.profile),
       id: userId,
@@ -177,7 +176,7 @@ export function createDomain(
     requested.length > 0 &&
     validTopics(requested) &&
     (isAdmin(current) ||
-      (current.role === "Senior Approver" &&
+      (current.role === "Senior Reviewer" &&
         requested.every((topic) => current.assignedTopics.includes(topic))));
   const canDiscuss = (current: Profile | null, discovery: Discovery) =>
     !!current &&
@@ -502,11 +501,7 @@ export function createDomain(
         application!.decidedBy = current.id;
         application!.decisionNote = (note as string).trim();
         if (approved) {
-          const access = state.access[application!.userId] ?? {
-            role: "Reader",
-            approvedTopics: [],
-            assignedTopics: [],
-          };
+          const access = normalizeAccessRecord(state.access[application!.userId]);
           access.approvedTopics = [
             ...new Set([...access.approvedTopics, ...application!.topics]),
           ];
@@ -578,11 +573,7 @@ export function createDomain(
         const invitation = findInvitation(state, current, codeHash);
         if (!sameTopics(scope, invitation.topics))
           bad("Confirm exactly the topics offered by this invitation.");
-        const access = state.access[userId] ?? {
-          role: "Reader",
-          approvedTopics: [],
-          assignedTopics: [],
-        };
+        const access = normalizeAccessRecord(state.access[userId]);
         access.approvedTopics = [
           ...new Set([...access.approvedTopics, ...scope]),
         ];
@@ -758,7 +749,7 @@ export function createDomain(
     ): Promise<void> {
       if (
         !numericId(targetId) ||
-        !["Reader", "Reviewer", "Approver", "Senior Approver"].includes(role as string)
+        !["Reader", "Reviewer", "Senior Reviewer"].includes(role as string)
       )
         bad("Choose an existing account and a non-admin role.");
       const approvedTopics = topics(approved);
@@ -766,9 +757,9 @@ export function createDomain(
       if (
         (role === "Reader" &&
           approvedTopics.length + assignedTopics.length > 0) ||
-        ((role === "Reviewer" || role === "Approver") &&
+        (role === "Reviewer" &&
           (!approvedTopics.length || assignedTopics.length)) ||
-        (role === "Senior Approver" && !assignedTopics.length)
+        (role === "Senior Reviewer" && !assignedTopics.length)
       )
         bad("Choose appropriate topic scopes for this role.");
       await store.updateAdmin((state) => {

@@ -130,18 +130,21 @@ Public visibility exposes the brief, selected images and rendered discussion thr
 | --- | --- |
 | `public` | Permission to see the discovery |
 | `reader` | A signed-in account that can see it |
-| `reviewer` | Review access for its topic, including current Senior Approver scope or the owner |
+| `reviewer` | Review access for its topic, including current Senior Reviewer scope or the owner |
 | `admin` | Configured owner identity |
 
 The astronomy records configure public briefs, selected images and paper PDFs, with sign-in required for selected supporting downloads. Their **Analysis package** material uses the existing `reviewer` access level for the investigation's topic and points to the complete reviewer package. Direct GitHub access is not required. Accounts that already have material access see **Open analysis package**; other signed-in accounts see **Request code access**, which records a request without granting access.
 
 GitHub handles identity, passwords and recovery. A researcher's GitHub token establishes identity and verified primary email, then is discarded; repository operations use an App installation token. The browser holds only a revocable SciDA session (token and expiry) in `localStorage`, so closing a tab or browser preserves sign-in until the server-enforced eight-hour expiry. An existing tab session migrates once when this version first loads. Profile data and permissions still come from the server. Pending OAuth state and the PKCE verifier remain in tab-only `sessionStorage`; OAuth also uses a first-party HttpOnly cookie and a single-use exchange code. Logout revokes the session and clears the browser identity across tabs; expiry or HTTP 401 also clears it. Browser storage must be enabled, and private browsing may discard it when its windows close. Configured API failures remain visible and never fabricate accounts or successful actions.
 
-- **Readers** manage their own profiles, request code and apply for review topics.
-- **Reviewers** discuss discoveries in approved topics.
-- **Approvers** have approved-topic review access but cannot approve others or create invitations merely by holding that role.
-- **Senior Approvers** assess other researchers and create invitations within assigned topics; those assignments also grant review/material access in the same topics.
+SciDA has four roles:
+
+- **Reader** manages their own profile, requests code and applies for review topics.
+- **Reviewer** discusses discoveries and accesses reviewer materials in approved topics.
+- **Senior Reviewer** assesses reviewer applications and creates invitations within assigned topics; those assignments also grant discussion and reviewer-material access in the same topics. Only the Admin appoints Senior Reviewers.
 - **Admin** is selected solely by `ADMIN_GITHUB_ID`, manages roles and research content/status, and has all-topic review access. Profile edits and browser storage cannot assign this role.
+
+Existing `Senior Approver` records are treated as **Senior Reviewer**, preserving approved review topics and assigned approval topics. Existing ordinary `Approver` records become **Reviewer** with their explicit approved topics retained and their old, inactive assigned topics removed. This change grants no new approval authority or review topics. New access changes accept only the current roles; historical audit entries retain their original wording. A Senior Reviewer's assigned scope remains separate from explicit review grants, so removing that scope also removes its inherited review access.
 
 Invitations are single-use, expire after seven days and bind to a verified email and exact topics. Revocations govern subsequent permission checks. Profile interests personalize **For you** without granting review access; **Recent discoveries** remains chronological. Scholar links are optional and not scraped. Other users' private email addresses are not published with discussion authors.
 

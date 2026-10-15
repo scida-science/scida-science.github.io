@@ -681,10 +681,10 @@ describe("Public research and real account interface", () => {
     ]);
   });
 
-  it("allows assigned senior approvers to review applications but never appoint approvers", async () => {
+  it("allows assigned senior reviewers to review applications but never appoint senior reviewers", async () => {
     signedIn({
       ...researcher,
-      role: "Senior Approver",
+      role: "Senior Reviewer",
       assignedTopics: ["bandit-theory"],
     });
     portal.state.applications = [
@@ -740,7 +740,7 @@ describe("Public research and real account interface", () => {
       within(role)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Reader", "Reviewer", "Approver", "Senior Approver"]);
+    ).toEqual(["Reader", "Reviewer", "Senior Reviewer"]);
     expect(
       screen.queryByRole("combobox", { name: "Role for Test Researcher" }),
     ).toBeNull();
@@ -756,7 +756,7 @@ describe("Public research and real account interface", () => {
     expect(screen.queryByText(/No discussion for this version yet/)).toBeNull();
   });
 
-  it.each(["Reader", "Reviewer", "Approver", "Senior Approver"] as const)(
+  it.each(["Reader", "Reviewer", "Senior Reviewer"] as const)(
     "does not expose the administrator code request queue to a %s",
     (role) => {
       signedIn({ ...researcher, role });

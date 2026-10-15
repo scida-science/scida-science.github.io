@@ -532,8 +532,10 @@ describe("Private administrative records and SHA concurrency", () => {
     await expect(store.readAdmin()).rejects.toMatchObject({ status: 503 });
   });
 
-  it("reloads after a SHA conflict and preserves a concurrent request instead of overwriting it", async () => {
+  it("migrates legacy roles before each SHA retry while preserving concurrent state", async () => {
     let state = emptyAdminState();
+    state.access.senior = { role: "Senior Approver", approvedTopics: ["exoplanets"], assignedTopics: ["bandit-theory"] };
+    state.access.ordinary = { role: "Approver", approvedTopics: ["exoplanets"], assignedTopics: ["bandit-theory"] };
     let sha = "original-sha";
     const submitted = {
       id: "ours",
@@ -551,6 +553,7 @@ describe("Private administrative records and SHA concurrency", () => {
       writes.push(write);
       if (writes.length === 1) {
         state.codeRequests.push(concurrent);
+        state.access.senior.assignedTopics = ["exoplanets"];
         sha = "concurrent-sha";
         return json({ message: "SHA conflict" }, 409);
       }
@@ -561,6 +564,8 @@ describe("Private administrative records and SHA concurrency", () => {
       return json({ content: { sha: "saved-sha" } });
     });
     const mutate = vi.fn((draft: AdminState) => {
+      expect(draft.access.senior.role).toBe("Senior Reviewer");
+      expect(draft.access.ordinary).toEqual({ role: "Reviewer", approvedTopics: ["exoplanets"], assignedTopics: [] });
       draft.codeRequests.push(submitted);
       return draft.codeRequests.length;
     });
@@ -574,6 +579,8 @@ describe("Private administrative records and SHA concurrency", () => {
       "concurrent",
       "ours",
     ]);
+    expect(state.access.senior).toEqual({ role: "Senior Reviewer", approvedTopics: ["exoplanets"], assignedTopics: ["exoplanets"] });
+    expect(state.access.ordinary).toEqual({ role: "Reviewer", approvedTopics: ["exoplanets"], assignedTopics: [] });
   });
 
   it("bounds repeated SHA conflicts and returns an explicit conflict without claiming success", async () => {

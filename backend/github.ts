@@ -13,6 +13,7 @@ import {
 } from "./model";
 import type { DiscussionComment } from "../src/types";
 import { validDiscovery } from "../src/services/validation";
+import { migrateAccessRoles } from "./accessRoles";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type Fetcher = typeof fetch;
@@ -264,6 +265,7 @@ export class GitHubRepositoryStore implements GitHubStore {
   async updateAdmin<T>(mutate: (state: AdminState) => T): Promise<T> {
     for (let attempt = 0; attempt < 4; attempt++) {
       const { value, sha } = await this.adminFile();
+      migrateAccessRoles(value);
       const result = mutate(value);
       try {
         await this.putJson(

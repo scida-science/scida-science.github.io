@@ -230,23 +230,23 @@ function ManageAccount({
       className="access-record stack"
       onSubmit={async (event) => {
         event.preventDefault();
-        if ((role === "Reviewer" || role === "Approver") && !approved.length)
+        if (role === "Reviewer" && !approved.length)
           return setResult({
             ok: false,
             message: `Choose at least one approved review topic for a ${role}.`,
           });
-        if (role === "Senior Approver" && !assigned.length)
+        if (role === "Senior Reviewer" && !assigned.length)
           return setResult({
             ok: false,
             message:
-              "Choose at least one assigned approval topic for a Senior Approver.",
+              "Choose at least one assigned approval topic for a Senior Reviewer.",
           });
         setPending(true);
         const outcome = await setAccess(
           profile.id,
           role,
           role === "Reader" ? [] : approved,
-          role === "Senior Approver" ? assigned : [],
+          role === "Senior Reviewer" ? assigned : [],
         );
         setResult(outcome);
         onSaved(outcome);
@@ -271,11 +271,10 @@ function ManageAccount({
         >
           <option>Reader</option>
           <option>Reviewer</option>
-          <option>Approver</option>
-          <option>Senior Approver</option>
+          <option>Senior Reviewer</option>
         </select>
       </label>
-      {(role === "Reviewer" || role === "Approver") && (
+      {role === "Reviewer" && (
         <TopicChoices
           label={`Approved review topics for ${profile.fullName}`}
           value={approved}
@@ -283,7 +282,7 @@ function ManageAccount({
           disabled={pending}
         />
       )}
-      {role === "Senior Approver" && (
+      {role === "Senior Reviewer" && (
         <>
           <p className="muted">
             Approval topics also include review access. Add review topics only
@@ -396,7 +395,7 @@ export default function AccessPage() {
   const effectiveReviewTopics = reviewTopics(user);
   const invitationMatches =
     invitation?.intendedEmail.toLowerCase() === user.email.toLowerCase();
-  const isApprover = user.role === "Senior Approver" || user.role === "Admin";
+  const hasApprovalAccess = user.role === "Senior Reviewer" || user.role === "Admin";
   const allowedInvitationTopics =
     user.role === "Admin"
       ? topics.map((topic) => topic.id)
@@ -454,7 +453,7 @@ export default function AccessPage() {
           <strong>Approved review topics:</strong>{" "}
           {topicNames(effectiveReviewTopics) || "None yet"}
         </p>
-        {user.role === "Senior Approver" && (
+        {user.role === "Senior Reviewer" && (
           <p>
             <strong>Assigned approval topics:</strong>{" "}
             {topicNames(user.assignedTopics) || "None"}
@@ -611,7 +610,7 @@ export default function AccessPage() {
             </p>
             <p className="muted">
               Accepting adds reviewer access for these topics only. It does not
-              grant approver, senior approver, or admin privileges.
+              grant Senior Reviewer or Admin privileges.
             </p>
             {invitation.usedBy ? (
               <p className="notice">
@@ -669,7 +668,7 @@ export default function AccessPage() {
         <Result result={invitationResult} />
       </section>
 
-      {isApprover && (
+      {hasApprovalAccess && (
         <>
           <section className="panel stack" aria-labelledby="queue-heading">
             <div className="section-heading">
@@ -845,7 +844,7 @@ export default function AccessPage() {
           <div className="section-heading">
             <h2 id="admin-access-heading">Manage researcher access</h2>
             <p className="muted">
-              Set review topics and appoint Senior Approvers to approve or
+              Set review topics and appoint Senior Reviewers to approve or
               invite reviewers within assigned topics.
             </p>
           </div>

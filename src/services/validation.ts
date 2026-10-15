@@ -9,7 +9,7 @@ export const topicIds: TopicId[] = [
   "exoplanets",
   "galaxy-evolution",
 ];
-export const roles: Role[] = ["Reader", "Reviewer", "Approver", "Senior Approver", "Admin"];
+export const roles: Role[] = ["Reader", "Reviewer", "Senior Reviewer", "Admin"];
 const fields: Field[] = ["Astronomy", "Artificial Intelligence"];
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);

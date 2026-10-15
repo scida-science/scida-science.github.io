@@ -169,7 +169,7 @@ describe("Archive records and public history", () => {
     expect(discovery.statusHistory).toEqual([archivedDecision, restoration]);
   });
 
-  it.each(["Reader", "Reviewer", "Approver", "Senior Approver"] as Role[])("never exposes the editor to %s", async (role) => {
+  it.each(["Reader", "Reviewer", "Senior Reviewer"] as Role[])("never exposes the editor to %s", async (role) => {
     portal.user!.role = role;
     const view = page(brief({ status: "Withdrawn", statusHistory: [archivedDecision] }));
     expect(screen.queryByRole("button", { name: "Edit discovery" })).toBeNull();

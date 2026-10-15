@@ -28,6 +28,7 @@ import {
   cleanProfile,
   profileError,
   discoveryUpdateError,
+  roles,
   validTopics,
 } from "./validation";
 
@@ -461,7 +462,7 @@ export function createPortalService(
       if (snapshot.user?.role !== "Admin")
         return Promise.resolve(
           fail(
-            "Only the administrator can manage access or appoint approvers.",
+            "Only the administrator can manage access or appoint Senior Reviewers.",
           ),
         );
       if (role === "Admin")
@@ -470,6 +471,8 @@ export function createPortalService(
             "Administrator access is controlled by the server configuration.",
           ),
         );
+      if (!roles.includes(role))
+        return Promise.resolve(fail("Choose Reader, Reviewer, or Senior Reviewer."));
       if (!validTopics(approved) || !validTopics(assigned))
         return Promise.resolve(fail("Choose recognized research topics."));
       return mutate(

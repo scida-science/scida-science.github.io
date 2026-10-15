@@ -191,7 +191,7 @@ try {
   assert.equal((await post('/v1/discoveries/' + archivedFixture.id, {
     discovery: { ...archivedPublic, status: 'Awaiting Validation', statusChangeReason: 'A Reader cannot restore this record.' },
   }, token)).status, 403, 'Readers cannot restore or alter an archived discovery');
-  assert.equal((await post('/v1/access/200', { role: 'Senior Approver', assignedTopics: ['bandit-theory'], approvedTopics: [] }, token)).status, 403);
+  assert.equal((await post('/v1/access/200', { role: 'Senior Reviewer', assignedTopics: ['bandit-theory'], approvedTopics: [] }, token)).status, 403);
   assert.equal(JSON.stringify(admin).includes('synthetic-github-user-token'), false, 'GitHub user tokens never persist');
   assert.equal(JSON.stringify(admin).includes(token), false, 'Only session hashes persist');
   assert.equal((await post('/auth/logout', {}, token)).status, 200);

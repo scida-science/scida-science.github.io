@@ -26,7 +26,7 @@ export function canManageTopic(user: Profile | null, topic: TopicId): boolean {
   return (
     !!user &&
     (user.role === "Admin" ||
-      (user.role === "Senior Approver" && user.assignedTopics.includes(topic)))
+      (user.role === "Senior Reviewer" && user.assignedTopics.includes(topic)))
   );
 }
 

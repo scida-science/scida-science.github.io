@@ -11,7 +11,7 @@ export interface StatusDecision {
   decidedByName: string;
   version: string;
 }
-export type Role = "Reader" | "Reviewer" | "Approver" | "Senior Approver" | "Admin";
+export type Role = "Reader" | "Reviewer" | "Senior Reviewer" | "Admin";
 export type TopicId =
   | "bandit-theory"
   | "machine-learning"

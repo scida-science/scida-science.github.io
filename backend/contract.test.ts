@@ -185,7 +185,7 @@ it("applies, approves within scope, and preserves Markdown in versioned threads 
   const owner = await repository(env.ADMIN_GITHUB_ID),
     reader = await repository("200"),
     approver = await repository("300");
-  await owner.setAccess("300", "Senior Approver", [], ["bandit-theory"]);
+  await owner.setAccess("300", "Senior Reviewer", [], ["bandit-theory"]);
   await reader.applyForReview(["bandit-theory"], "Relevant research evidence");
   const application = (await approver.read()).state.applications[0];
   await approver.reviewApplication(
@@ -252,23 +252,32 @@ it("applies, approves within scope, and preserves Markdown in versioned threads 
     reader.addComment({ ...comment, discoveryId: "AST-001" }),
   ).rejects.toMatchObject({ status: 403 });
   await expect(
-    approver.setAccess("200", "Senior Approver", [], ["exoplanets"]),
+    approver.setAccess("200", "Senior Reviewer", [], ["exoplanets"]),
   ).rejects.toMatchObject({ status: 403 });
 });
-it("returns HTTP 403 for ordinary Approver approval, invitation and senior appointment attempts", async () => {
+it("returns HTTP 403 for Reviewer approval, invitation and senior appointment attempts", async () => {
   const owner = await repository(env.ADMIN_GITHUB_ID);
   const approver = await repository("300");
   const reader = await repository("200");
-  await owner.setAccess("300", "Approver", ["bandit-theory"], []);
+  await owner.setAccess("300", "Reviewer", ["bandit-theory"], []);
   await reader.applyForReview(["bandit-theory"], "Relevant research evidence");
   const application = state.applications[0];
-  expect((await approver.read()).user?.role).toBe("Approver");
+  expect((await approver.read()).user?.role).toBe("Reviewer");
   expect((await approver.read()).state.applications).toEqual([]);
   await expect(approver.reviewApplication(application.id, "Approved", "")).rejects.toMatchObject({ status: 403 });
   await expect(approver.createInvitation(["bandit-theory"], "400@example.test")).rejects.toMatchObject({ status: 403 });
-  await expect(approver.setAccess("200", "Senior Approver", [], ["bandit-theory"])).rejects.toMatchObject({ status: 403 });
+  await expect(approver.setAccess("200", "Senior Reviewer", [], ["bandit-theory"])).rejects.toMatchObject({ status: 403 });
   expect(state.applications[0].status).toBe("Pending");
   expect(state.invitations).toEqual([]);
+  expect(state.access["200"].role).toBe("Reader");
+});
+it.each(["Approver", "Senior Approver"])("rejects retired role %s through the actual HTTP endpoint", async (role) => {
+  const response = await handleRequest(new Request(env.API_ORIGIN + "/v1/access/200", {
+    method: "POST",
+    headers: { Origin: env.FRONTEND_ORIGIN, "Content-Type": "application/json", Authorization: "Bearer " + "1".repeat(43) },
+    body: JSON.stringify({ role, approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"] }),
+  }), env, store);
+  expect(response.status).toBe(400);
   expect(state.access["200"].role).toBe("Reader");
 });
 it("round-trips invitation preview/acceptance and code requests without local fabricated success", async () => {

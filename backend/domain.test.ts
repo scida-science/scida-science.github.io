@@ -3,6 +3,7 @@ import { discoveries } from "../test/fixtures/discoveries";
 import type { Discovery, DiscussionComment, ProfileInput, StatusDecision } from "../src/types";
 import { MAX_STATUS_DECISIONS } from "../src/services/validation";
 import { createDomain, validDiscoveryDocument } from "./domain";
+import { migrateAccessRoles } from "./accessRoles";
 import { emptyAdminState, HttpError, validMaterial } from "./model";
 import type {
   AdminState,
@@ -134,7 +135,7 @@ beforeEach(() => {
     assignedTopics: [],
   };
   store.state.access[APPROVER] = {
-    role: "Senior Approver",
+    role: "Senior Reviewer",
     approvedTopics: [],
     assignedTopics: ["bandit-theory"],
   };
@@ -379,7 +380,25 @@ describe("server identity, profiles, and privacy", () => {
 });
 
 describe("scope-specific applications and account permissions", () => {
-  it("keeps ordinary Approvers discussion-only, even with legacy assigned topics", async () => {
+  it("retains legacy senior authority within assigned topics and projects only the new role", async () => {
+    store.state.access[APPROVER] = { role: "Senior Approver", approvedTopics: ["exoplanets"], assignedTopics: ["bandit-theory"] };
+    const portal = await domain.portal(APPROVER);
+    expect(portal.user).toMatchObject({ role: "Senior Reviewer", approvedTopics: ["exoplanets"], assignedTopics: ["bandit-theory"] });
+    expect(store.state.access[APPROVER].role).toBe("Senior Approver");
+    await domain.applyForReview(READER, ["bandit-theory"], "Relevant research evidence.");
+    await domain.reviewApplication(APPROVER, store.state.applications[0].id, true, "");
+    expect(store.state.access[READER].approvedTopics).toEqual(["bandit-theory"]);
+    await denied(domain.createInvitation(APPROVER, ["exoplanets"], "invitee@example.test"));
+  });
+
+  it("canonicalizes legacy ordinary access when approving an application", async () => {
+    store.state.access[OTHER] = { role: "Approver", approvedTopics: ["exoplanets"], assignedTopics: ["scientific-ai"] };
+    await domain.applyForReview(OTHER, ["bandit-theory"], "Relevant research evidence.");
+    await domain.reviewApplication(APPROVER, store.state.applications[0].id, true, "");
+    expect(store.state.access[OTHER]).toEqual({ role: "Reviewer", approvedTopics: ["exoplanets", "bandit-theory"], assignedTopics: [] });
+  });
+
+  it("reads legacy ordinary Approvers as Reviewers without inherited approval topics", async () => {
     store.state.access[OTHER] = {
       role: "Approver",
       approvedTopics: ["bandit-theory"],
@@ -390,24 +409,30 @@ describe("scope-specific applications and account permissions", () => {
     const before = copy(store.state);
     await denied(domain.reviewApplication(OTHER, application.id, true, ""));
     await denied(domain.createInvitation(OTHER, ["bandit-theory"], "invitee@example.test"));
-    await denied(domain.setAccess(OTHER, READER, "Senior Approver", [], ["bandit-theory"]));
+    await denied(domain.setAccess(OTHER, READER, "Senior Reviewer", [], ["bandit-theory"]));
     expect(store.state).toEqual(before);
     const portal = await domain.portal(OTHER);
-    expect(portal.user?.role).toBe("Approver");
+    expect(portal.user?.role).toBe("Reviewer");
+    expect(portal.user?.assignedTopics).toEqual([]);
+    expect(store.state.access[OTHER].role).toBe("Approver");
     expect(portal.state.applications).toEqual([]);
     expect(portal.state.profiles.map((item) => item.id)).toEqual([OTHER]);
     expect((await domain.addComment(OTHER, comment())).authorId).toBe(OTHER);
     await denied(domain.addComment(OTHER, comment({ discoveryId: "AST-001", version: "v0.1" })));
   });
 
-  it("allows only the owner to appoint an ordinary Approver with discussion topics", async () => {
-    await denied(domain.setAccess(APPROVER, OTHER, "Approver", ["bandit-theory"], []));
-    await domain.setAccess(OWNER, OTHER, "Approver", ["bandit-theory"], []);
+  it("allows only the owner to appoint a Reviewer with discussion topics", async () => {
+    await denied(domain.setAccess(APPROVER, OTHER, "Reviewer", ["bandit-theory"], []));
+    await domain.setAccess(OWNER, OTHER, "Reviewer", ["bandit-theory"], []);
     expect(store.state.access[OTHER]).toEqual({
-      role: "Approver",
+      role: "Reviewer",
       approvedTopics: ["bandit-theory"],
       assignedTopics: [],
     });
+  });
+  it.each(["Approver", "Senior Approver"])("rejects the retired %s role even when the owner submits it", async (role) => {
+    await denied(domain.setAccess(OWNER, OTHER, role, ["bandit-theory"], ["exoplanets"]), 400);
+    expect(store.state.access[OTHER].role).toBe("Reader");
   });
 
   it("does not allow the owner to decide their own review application", async () => {
@@ -495,10 +520,10 @@ describe("scope-specific applications and account permissions", () => {
   });
   it("only owner appoints approvers; API never appoints or changes owner", async () => {
     await denied(
-      domain.setAccess(READER, OTHER, "Senior Approver", [], ["bandit-theory"]),
+      domain.setAccess(READER, OTHER, "Senior Reviewer", [], ["bandit-theory"]),
     );
     await denied(
-      domain.setAccess(APPROVER, OTHER, "Senior Approver", [], ["bandit-theory"]),
+      domain.setAccess(APPROVER, OTHER, "Senior Reviewer", [], ["bandit-theory"]),
     );
     await denied(domain.setAccess(OWNER, OTHER, "Admin", [], []), 400);
     await denied(
@@ -507,12 +532,12 @@ describe("scope-specific applications and account permissions", () => {
     await domain.setAccess(
       OWNER,
       OTHER,
-      "Senior Approver",
+      "Senior Reviewer",
       ["exoplanets"],
       ["exoplanets"],
     );
     expect(store.state.access[OTHER]).toMatchObject({
-      role: "Senior Approver",
+      role: "Senior Reviewer",
       assignedTopics: ["exoplanets"],
     });
   });
@@ -522,7 +547,7 @@ describe("scope-specific applications and account permissions", () => {
     ["Reviewer", ["bandit-theory"], ["exoplanets"]],
     ["Approver", [], []],
     ["Approver", ["bandit-theory"], ["exoplanets"]],
-    ["Senior Approver", [], []],
+    ["Senior Reviewer", [], []],
   ])(
     "rejects inconsistent role/topic assignments %s",
     async (role, approved, assigned) => {
@@ -571,6 +596,17 @@ describe("scope-specific applications and account permissions", () => {
 });
 
 describe("email-bound invitations", () => {
+  it("preserves invitations from renamed seniors and canonicalizes legacy recipients", async () => {
+    store.state.access[APPROVER].role = "Senior Approver";
+    const invitation = await domain.createInvitation(APPROVER, ["bandit-theory"], "invitee@example.test");
+    migrateAccessRoles(store.state);
+    store.state.access[INVITEE] = { role: "Approver", approvedTopics: ["exoplanets"], assignedTopics: ["scientific-ai"] };
+    expect((await domain.previewInvitation(INVITEE, invitation.code)).topics).toEqual(["bandit-theory"]);
+    await domain.acceptInvitation(INVITEE, invitation.code, ["bandit-theory"]);
+    expect(store.state.access[APPROVER].role).toBe("Senior Reviewer");
+    expect(store.state.access[INVITEE]).toEqual({ role: "Reviewer", approvedTopics: ["exoplanets", "bandit-theory"], assignedTopics: [] });
+  });
+
   it("rejects a prior invitation after its issuer becomes an ordinary Approver", async () => {
     const invitation = await domain.createInvitation(
       APPROVER,
@@ -691,7 +727,7 @@ describe("discussions and code requests", () => {
     await domain.setAccess(OWNER, REVIEWER, "Reader", [], []);
     await denied(domain.addComment(REVIEWER, comment()));
   });
-  it("inherits Senior Approver discussion and reply access only within assigned topics", async () => {
+  it("inherits Senior Reviewer discussion and reply access only within assigned topics", async () => {
     store.state.access[APPROVER].approvedTopics = ["exoplanets"];
     const accessBefore = copy(store.state.access[APPROVER]);
     const parent = await domain.addComment(APPROVER, comment());
@@ -722,12 +758,12 @@ describe("discussions and code requests", () => {
     expect(store.state.access[OWNER].assignedTopics).toEqual([]);
   });
   it("removes inherited review access when an approval scope is removed or the role is demoted", async () => {
-    await domain.setAccess(OWNER, APPROVER, "Senior Approver", ["exoplanets"], ["bandit-theory"]);
+    await domain.setAccess(OWNER, APPROVER, "Senior Reviewer", ["exoplanets"], ["bandit-theory"]);
     const parent = await domain.addComment(APPROVER, comment());
-    await domain.setAccess(OWNER, APPROVER, "Senior Approver", ["exoplanets"], ["scientific-ai"]);
+    await domain.setAccess(OWNER, APPROVER, "Senior Reviewer", ["exoplanets"], ["scientific-ai"]);
     await denied(domain.addComment(APPROVER, comment({ parentId: parent.id })));
     await domain.addComment(APPROVER, comment({ discoveryId: "AI-003", version: "v1.0" }));
-    await domain.setAccess(OWNER, APPROVER, "Approver", ["exoplanets"], []);
+    await domain.setAccess(OWNER, APPROVER, "Reviewer", ["exoplanets"], []);
     await denied(domain.addComment(APPROVER, comment({ discoveryId: "AI-003", version: "v1.0" })));
     await domain.addComment(APPROVER, comment({ discoveryId: "AST-002", version: "v1.1" }));
     expect(store.state.access[APPROVER].approvedTopics).toEqual(["exoplanets"]);
@@ -1053,7 +1089,7 @@ describe("discovery content, visibility, and materials", () => {
     );
     await domain.authorizeMaterial(APPROVER, "AI-001", "paper");
     await denied(domain.authorizeMaterial(APPROVER, "AST-001", "paper"), 404);
-    await domain.setAccess(OWNER, APPROVER, "Senior Approver", [], ["exoplanets"]);
+    await domain.setAccess(OWNER, APPROVER, "Senior Reviewer", [], ["exoplanets"]);
     await denied(domain.authorizeMaterial(APPROVER, "AI-001", "paper"), 404);
     const restrictedBrief = (await domain.portal(APPROVER)).state.discoveries.find(
       (item) => item.id === "AI-001",

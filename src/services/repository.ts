@@ -26,6 +26,15 @@ export interface PortalResponse {
   user: Profile | null;
 }
 
+// Read-only compatibility while the new frontend and Worker roll out separately.
+// Legacy names are never offered as roles or sent in access-management writes.
+function canonicalServerProfile(profile: Profile): Profile {
+  const role: string = profile.role;
+  if (role === "Senior Approver") return { ...profile, role: "Senior Reviewer" };
+  if (role === "Approver") return { ...profile, role: "Reviewer", assignedTopics: [] };
+  return profile;
+}
+
 /** The Worker enforces permissions and writes shared records to private GitHub files. */
 export function createPortalRepository(client: ApiClient) {
   return {
@@ -47,7 +56,7 @@ export function createPortalRepository(client: ApiClient) {
         !(
           result.user === null ||
           (typeof result.user?.id === "string" &&
-            roles.includes(result.user.role))
+            roles.includes(canonicalServerProfile(result.user).role))
         )
       )
         throw new Error("The SciDA API returned incomplete portal data.");
@@ -57,8 +66,10 @@ export function createPortalRepository(client: ApiClient) {
         );
       return {
         ...result,
+        user: result.user && canonicalServerProfile(result.user),
         state: {
           ...result.state,
+          profiles: result.state.profiles.map(canonicalServerProfile),
           // Old illustrative repositories must not reappear in a real research feed.
           discoveries: result.state.discoveries.filter((discovery) => discovery.illustrative === false),
         },

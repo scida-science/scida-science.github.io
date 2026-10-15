@@ -277,7 +277,7 @@ export default function ProfilePage() {
                 : "No approved topics yet"}
             </dd>
           </div>
-          {user.role === "Senior Approver" && (
+          {user.role === "Senior Reviewer" && (
             <div>
               <dt>Assigned approval topics</dt>
               <dd>

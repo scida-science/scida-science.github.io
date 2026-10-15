@@ -254,7 +254,7 @@ describe("API configuration and sessions", () => {
       (
         await service.actions.setAccess(
           profile().id,
-          "Approver",
+          "Reviewer",
           [],
           ["bandit-theory"],
         )
@@ -263,13 +263,37 @@ describe("API configuration and sessions", () => {
   });
 });
 
-describe("Senior Approver permissions", () => {
-  it("parses a server-issued Senior Approver and grants only their assigned approval scope", async () => {
-    const { service, setProfile } = setup({ role: "Senior Approver" });
-    setProfile({ ...profile("Senior Approver"), assignedTopics: ["bandit-theory"] });
+describe("Senior Reviewer permissions", () => {
+  it.each(["Approver", "Senior Approver"])("does not submit retired role %s from account management", async (legacyRole) => {
+    const { service, fetcher } = setup({ role: "Admin" });
+    await service.start();
+    const result = await service.actions.setAccess("other", legacyRole as Profile["role"], ["bandit-theory"], []);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("Senior Reviewer");
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("/v1/access/"))).toBe(false);
+  });
+
+  it.each(["Senior Approver", "Approver"])("normalizes the legacy server role %s without adding approval scope", async (legacyRole) => {
+    const { service, routes } = setup();
+    const legacy = { ...profile(), role: legacyRole, approvedTopics: ["exoplanets"], assignedTopics: ["bandit-theory"] };
+    routes.set("/v1/portal", () => json({ state: { ...emptyPortalState(), profiles: [legacy] }, user: legacy }));
+    await service.start();
+    const snapshot = service.getSnapshot();
+    expect(snapshot.error).toBeNull();
+    expect(snapshot.user?.role).toBe(legacyRole === "Approver" ? "Reviewer" : "Senior Reviewer");
+    expect(snapshot.state.profiles[0].role).toBe(snapshot.user?.role);
+    expect(snapshot.user?.approvedTopics).toEqual(["exoplanets"]);
+    expect(snapshot.user?.assignedTopics).toEqual(legacyRole === "Approver" ? [] : ["bandit-theory"]);
+    expect(canManageTopic(snapshot.user, "bandit-theory")).toBe(legacyRole === "Senior Approver");
+    expect(canManageTopic(snapshot.user, "exoplanets")).toBe(false);
+  });
+
+  it("parses a server-issued Senior Reviewer and grants only their assigned approval scope", async () => {
+    const { service, setProfile } = setup({ role: "Senior Reviewer" });
+    setProfile({ ...profile("Senior Reviewer"), assignedTopics: ["bandit-theory"] });
     await service.start();
     const user = service.getSnapshot().user;
-    expect(user?.role).toBe("Senior Approver");
+    expect(user?.role).toBe("Senior Reviewer");
     expect(canManageTopic(user, "bandit-theory")).toBe(true);
     expect(canManageTopic(user, "exoplanets")).toBe(false);
     expect(canDiscuss(user, discoveries[0])).toBe(true);
@@ -280,9 +304,9 @@ describe("Senior Approver permissions", () => {
     })).toBe(true);
   });
 
-  it("denies ordinary Approver invitations while preserving approved discussions", async () => {
-    const { service, setProfile, fetcher } = setup({ role: "Approver" });
-    setProfile({ ...profile("Approver"), approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"] });
+  it("denies Reviewer invitations while preserving approved discussions", async () => {
+    const { service, setProfile, fetcher } = setup({ role: "Reviewer" });
+    setProfile({ ...profile("Reviewer"), approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"] });
     await service.start();
     const user = service.getSnapshot().user;
     expect(canManageTopic(user, "bandit-theory")).toBe(false);
@@ -297,7 +321,7 @@ describe("Senior Approver permissions", () => {
 
   it("combines approval scope with explicit review grants without expanding approval authority", () => {
     const senior: Profile = {
-      ...profile("Senior Approver"),
+      ...profile("Senior Reviewer"),
       assignedTopics: ["bandit-theory"],
       approvedTopics: ["bandit-theory", "exoplanets"],
     };
@@ -309,7 +333,7 @@ describe("Senior Approver permissions", () => {
   it("removes inherited review access after a scope change or demotion on refresh", async () => {
     const { service, setProfile } = setup();
     const senior: Profile = {
-      ...profile("Senior Approver"),
+      ...profile("Senior Reviewer"),
       assignedTopics: ["bandit-theory"],
       approvedTopics: ["exoplanets"],
     };
@@ -319,7 +343,7 @@ describe("Senior Approver permissions", () => {
     setProfile({ ...senior, assignedTopics: ["scientific-ai"] });
     await service.actions.refresh();
     expect(reviewTopics(service.getSnapshot().user)).toEqual(["scientific-ai", "exoplanets"]);
-    setProfile({ ...senior, role: "Approver" });
+    setProfile({ ...senior, role: "Reviewer" });
     await service.actions.refresh();
     expect(reviewTopics(service.getSnapshot().user)).toEqual(["exoplanets"]);
   });
@@ -332,7 +356,7 @@ describe("Senior Approver permissions", () => {
     }
     expect(reviewTopics(null)).toEqual([]);
     expect(reviewTopics({ ...profile(), approvedTopics: ["bandit-theory"], assignedTopics: ["bandit-theory"] })).toEqual([]);
-    expect(reviewTopics({ ...profile("Approver"), assignedTopics: ["bandit-theory"] })).toEqual([]);
+    expect(reviewTopics({ ...profile("Reviewer"), assignedTopics: ["bandit-theory"] })).toEqual([]);
   });
 });
 
