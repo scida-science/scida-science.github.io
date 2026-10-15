@@ -1,3 +1,6 @@
+import type { ReviewerPackage } from "../types";
+import { parseReviewerPackage } from "./reviewerPackage";
+
 export interface SciDASession {
   token: string;
   expiresAt: string;
@@ -215,10 +218,13 @@ export function createApiClient(
     },
     async download(
       path: string,
-    ): Promise<{ blob?: Blob; filename?: string; url?: string }> {
+      options: { maxBytes?: number } = {},
+    ): Promise<{ blob?: Blob; filename?: string; url?: string; package?: ReviewerPackage }> {
       const result = await response(path);
       if (result.headers.get("Content-Type")?.includes("application/json")) {
         const payload: unknown = await result.json();
+        if (payload && typeof payload === "object" && "package" in payload)
+          return { package: parseReviewerPackage(payload.package, baseUrl, path) };
         const value =
           payload && typeof payload === "object" && "url" in payload
             ? payload.url
@@ -241,6 +247,23 @@ export function createApiClient(
         } catch {
           filename = undefined;
         }
+      }
+      if (options.maxBytes !== undefined) {
+        const reader = result.body?.getReader();
+        if (!reader) throw new Error("The package file is empty.");
+        const chunks: Uint8Array<ArrayBuffer>[] = [];
+        let size = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > options.maxBytes) {
+            await reader.cancel();
+            throw new Error("The package file exceeds its recorded size.");
+          }
+          chunks.push(new Uint8Array(value));
+        }
+        return { blob: new Blob(chunks), filename };
       }
       return { blob: await result.blob(), filename };
     },

@@ -3,10 +3,12 @@ import { appJwt } from "./crypto";
 import {
   HttpError,
   object,
+  validReviewerPackage,
   type AdminState,
   type DiscoveryDocument,
   type GitHubStore,
   type StoredDiscovery,
+  type ReviewerPackage,
 } from "./model";
 import type { DiscussionComment } from "../src/types";
 import { validDiscovery } from "../src/services/validation";
@@ -524,6 +526,31 @@ export class GitHubRepositoryStore implements GitHubStore {
       "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
       "Referrer-Policy": "no-referrer",
     } });
+  }
+  async reviewerPackage(record: StoredDiscovery, path: string): Promise<ReviewerPackage> {
+    const response = await this.materialFile(record, path);
+    const reader = response.body?.getReader();
+    if (!reader) throw new HttpError(503, "The reviewer package manifest is empty.");
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 2 * 1024 * 1024) {
+        await reader.cancel();
+        throw new HttpError(503, "The reviewer package manifest is too large.");
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    let value: unknown;
+    try { value = JSON.parse(new TextDecoder().decode(bytes)); }
+    catch { throw new HttpError(503, "The reviewer package manifest is invalid."); }
+    if (!validReviewerPackage(value, path)) throw new HttpError(503, "The reviewer package manifest is invalid.");
+    return value;
   }
   async materialFile(record: StoredDiscovery, path: string): Promise<Response> {
     const response = await this.api.raw(

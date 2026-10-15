@@ -52,6 +52,10 @@
             },
             "access": {
               "$ref": "#/$defs/materialAccess"
+            },
+            "format": {
+              "const": "multipart-zip",
+              "description": "Optional reviewer package manifest transport. The path names reviewer/package.json; declared files are downloaded through the same material authorization, then verified and assembled locally. Omit for a single file."
             }
           }
         },

@@ -118,6 +118,20 @@ export interface PortalState {
 export interface ActionResult {
   ok: boolean;
   message: string;
+  package?: ReviewerPackage;
+}
+export interface ReviewerPackageFile {
+  id: string;
+  filename: string;
+  size: number;
+  sha256: string;
+  url: string;
+}
+export interface ReviewerPackage {
+  filename: string;
+  size: number;
+  sha256: string;
+  files: ReviewerPackageFile[];
 }
 export type ProfileInput = Omit<
   Profile,

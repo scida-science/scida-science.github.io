@@ -18,6 +18,7 @@ import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
 import EvidenceFigure from "../components/EvidenceFigure";
+import ReviewerPackage from "../components/ReviewerPackage";
 import type { ActionResult, Discovery } from "../types";
 
 const Equation = lazy(() => import("../components/Equation"));
@@ -31,7 +32,7 @@ const materialNames: Array<{
   { key: "appendix", label: "Appendix", icon: BookOpen },
   { key: "figures", label: "Figures", icon: Image },
   { key: "data", label: "Data", icon: Database },
-  { key: "repository", label: "GitHub repository", icon: Code2 },
+  { key: "repository", label: "Analysis code", icon: Code2 },
 ];
 function Materials({ discovery }: { discovery: Discovery }) {
   const { state, user, requestCode, downloadMaterial, configured, error } =
@@ -46,6 +47,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
   const [downloadResult, setDownloadResult] = useState<ActionResult | null>(
     null,
   );
+  const [packageKind, setPackageKind] = useState<keyof Discovery["materials"]>("repository");
   const requests = state.codeRequests.filter(
     (r) => r.discoveryId === discovery.id && r.userId === user?.id,
   );
@@ -67,6 +69,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
                     disabled={downloading !== null}
                     onClick={async () => {
                       setDownloading(key);
+                      setPackageKind(key);
                       setDownloadResult(null);
                       try {
                         setDownloadResult(
@@ -87,7 +90,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
                     {downloading === key
                       ? "Opening…"
                       : key === "repository"
-                        ? "Open GitHub repository"
+                        ? "Open analysis code"
                         : `Open ${label.toLowerCase()}`}
                   </button>
                 ) : (
@@ -121,6 +124,8 @@ function Materials({ discovery }: { discovery: Discovery }) {
             {downloadResult.message}
           </p>
         )}
+        {downloadResult?.package && <ReviewerPackage key={`${discovery.id}-${packageKind}`}
+          discoveryId={discovery.id} kind={packageKind} bundle={downloadResult.package} />}
         {user && configured ? (
           <button
             className="btn btn-secondary request-code-button"

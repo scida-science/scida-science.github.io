@@ -1,5 +1,6 @@
 import { discoveries } from "../data/discoveries";
 import { ApiError, type ApiClient } from "../lib/api";
+import { existingPackageFile, verifyPackageFile, type PackageDirectory } from "../lib/reviewerPackage";
 import type {
   ActionResult,
   CommentInput,
@@ -10,6 +11,7 @@ import type {
   ProfileInput,
   Role,
   TopicId,
+  ReviewerPackageFile,
 } from "../types";
 import { createGitHubAuth, type GitHubAuth } from "./auth";
 import {
@@ -438,6 +440,10 @@ export function createPortalService(
       try {
         const material = await repo.downloadMaterial(discoveryId, kind);
         if (token !== client.getSession()?.token) return changedAccount();
+        if (material.package) {
+          publish({ error: null });
+          return { ok: true, message: "The complete analysis package is ready to download.", package: material.package };
+        }
         if (material.url)
           (
             dependencies.navigate ??
@@ -462,6 +468,33 @@ export function createPortalService(
       } catch (error) {
         return fail(reason(error));
       }
+    },
+    async downloadPackageFile(discoveryId: string, kind: keyof Discovery["materials"], file: ReviewerPackageFile,
+      directory?: PackageDirectory): Promise<ActionResult> {
+      if (!client || !repo) return missingBackend();
+      const token = client.getSession()?.token;
+      if (!/^[a-z0-9-]{1,64}$/.test(file.id) || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(file.filename) ||
+          file.filename.includes("..") || !Number.isSafeInteger(file.size) || file.size < 1 || file.size > 100 * 1024 * 1024)
+        return fail("Invalid package file.");
+      try {
+        // Obtain current authorization even when a matching file already exists locally.
+        const result = await client.download(`/v1/discoveries/${encodeURIComponent(discoveryId)}/materials/${encodeURIComponent(kind)}/files/${encodeURIComponent(file.id)}`,
+          { maxBytes: file.size });
+        if (token !== client.getSession()?.token) return changedAccount();
+        if (!result.blob) throw new Error("The package file response is invalid.");
+        await verifyPackageFile(result.blob, file);
+        if (token !== client.getSession()?.token) return changedAccount();
+        if (directory) {
+          if (!(await existingPackageFile(directory, file))) {
+            const handle = await directory.getFileHandle(file.filename, { create: true });
+            const writer = await handle.createWritable();
+            try { await writer.write(result.blob); await writer.close(); }
+            catch (error) { await writer.abort(); throw error; }
+          }
+        } else (dependencies.saveDownload ?? saveDownload)(result.blob, file.filename);
+        publish({ error: null });
+        return { ok: true, message: `Verified and saved ${file.filename}.` };
+      } catch (error) { return fail(reason(error)); }
     },
   };
   return {

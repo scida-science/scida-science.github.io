@@ -117,7 +117,7 @@ export async function handleRequest(
         response = await store.figureFile(record, figure.path);
       }
       else if (
-        parts.length === 5 &&
+        (parts.length === 5 || (parts.length === 7 && parts[5] === "files")) &&
         parts[0] === "v1" &&
         parts[1] === "discoveries" &&
         parts[3] === "materials" &&
@@ -128,10 +128,28 @@ export async function handleRequest(
           parts[2],
           parts[4],
         );
+        if (parts.length === 7 && material.format !== "multipart-zip")
+          throw new HttpError(404, "Package file not found.");
         if ("url" in material) response = json({ url: material.url });
-        else if (store instanceof GitHubRepositoryStore)
-          response = await store.materialFile(record, material.path);
-        else
+        else if (store instanceof GitHubRepositoryStore) {
+          if (material.format === "multipart-zip") {
+            const manifest = await store.reviewerPackage(record, material.path);
+            if (parts.length === 7) {
+              const file = manifest.files.find((candidate) => candidate.id === parts[6]);
+              if (!file) throw new HttpError(404, "Package file not found.");
+              response = await store.materialFile(record, file.path);
+            } else {
+              const base = `${env.API_ORIGIN.replace(/\/$/, "")}/v1/discoveries/${encodeURIComponent(parts[2])}/materials/${encodeURIComponent(parts[4])}/files/`;
+              response = json({ package: {
+                filename: manifest.filename, size: manifest.size, sha256: manifest.sha256,
+                files: manifest.files.map((file) => ({
+                  id: file.id, filename: file.path.split("/").at(-1)!, size: file.size,
+                  sha256: file.sha256, url: base + encodeURIComponent(file.id),
+                })),
+              } });
+            }
+          } else response = await store.materialFile(record, material.path);
+        } else
           throw new HttpError(
             501,
             "Material transport is unavailable in this test adapter.",

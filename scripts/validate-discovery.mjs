@@ -1,10 +1,11 @@
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { build } from "esbuild";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat, lstat } from "node:fs/promises";
 import { resolve, relative, isAbsolute, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const schema = JSON.parse(await readFile(resolve(root, "docs/discovery.schema.json"), "utf8"));
@@ -12,8 +13,8 @@ const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
 const validateSchema = ajv.compile(schema);
 // Reuse the deployed semantic checks as well as the published JSON Schema.
-const bundled = await build({ entryPoints: [resolve(root, "backend/domain.ts")], bundle: true, platform: "node", format: "esm", write: false });
-const { validDiscoveryDocument } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+const bundled = await build({ stdin: { contents: 'export { validDiscoveryDocument } from "./backend/domain"; export { validReviewerPackage } from "./backend/model";', resolveDir: root }, bundle: true, platform: "node", format: "esm", write: false });
+const { validDiscoveryDocument, validReviewerPackage } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
 const targets = process.argv.slice(2);
 if (!targets.length) throw new Error("Usage: node scripts/validate-discovery.mjs <repository> [...repositories]");
 const ids = new Set();
@@ -26,18 +27,42 @@ for (const target of targets) {
   ids.add(doc.discovery.id);
   if (Object.values(doc.discovery.materials).some((v) => v !== null))
     throw new Error("Repository compatibility material slots must be null");
-  async function checkedFile(path) {
+  async function checkedPath(path, rejectLinks = false) {
     const actual = await realpath(resolve(repo, path));
     const rel = relative(repo, actual);
     if (isAbsolute(rel) || rel === ".." || rel.startsWith("../") || rel.startsWith("..\\"))
       throw new Error(`Path escapes repository: ${path}`);
     if (!(await stat(actual)).isFile()) throw new Error(`Not a file: ${path}`);
-    return readFile(actual);
+    if (rejectLinks) {
+      let current = repo;
+      for (const part of path.split("/")) {
+        current = resolve(current, part);
+        if ((await lstat(current)).isSymbolicLink()) throw new Error(`Linked package path: ${path}`);
+      }
+    }
+    return actual;
+  }
+  async function checkedFile(path) {
+    return readFile(await checkedPath(path));
   }
   for (const material of Object.values(doc.materials)) {
     if (material?.path) {
       if (material.path.startsWith("internal/")) throw new Error("Internal evidence must not be exposed as a material");
-      await checkedFile(material.path);
+      await checkedPath(material.path, material.format === "multipart-zip");
+      if (material.format === "multipart-zip") {
+        if ((await stat(await checkedPath(material.path))).size > 2 * 1024 * 1024)
+          throw new Error("Reviewer package manifest exceeds 2 MiB");
+        const manifest = JSON.parse(await checkedFile(material.path));
+        if (!validReviewerPackage(manifest, material.path)) throw new Error("Invalid reviewer package manifest");
+        for (const file of manifest.files) {
+          const path = await checkedPath(file.path, true);
+          if ((await stat(path)).size !== file.size) throw new Error(`Package size mismatch: ${file.path}`);
+          const hash = createHash("sha256");
+          for await (const chunk of createReadStream(path)) hash.update(chunk);
+          if (hash.digest("hex") !== file.sha256) throw new Error(`Package hash mismatch: ${file.path}`);
+        }
+        console.log(`${doc.discovery.id}: reviewer package ${manifest.files.length} files verified`);
+      }
     }
   }
   for (const figure of doc.discovery.figures ?? []) {

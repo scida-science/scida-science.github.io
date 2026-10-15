@@ -23,7 +23,7 @@ Earlier deployment documentation records a connected production site and success
 | [.github/workflows/deploy.yml](.github/workflows/deploy.yml) | Tests, frontend build and Pages deployment |
 | `dist/`, `.worker-dist/` | Ignored generated frontend and packaged Worker output |
 
-Private manuscripts, scientific inputs, internal records and correspondence do not belong in this public website repository. Private investigation repositories hold their own briefs and selected materials. The full executable scientific bundles are separate from these compact website selections.
+Private manuscripts, scientific inputs, internal records and correspondence do not belong in this public website repository. Private investigation repositories hold their own briefs, selected materials and complete reviewer packages under `reviewer/`. Their concise root READMEs guide reproduction; website integration and access operations belong here.
 
 ## Local setup and preview
 
@@ -63,6 +63,7 @@ Only `VITE_SCIDA_API_URL` is allowed as frontend configuration. It must be an HT
 | `npm.cmd run test:worker` | Packaged Worker in workerd with local GitHub fixtures for signing, OAuth, access and transport |
 | `npm.cmd run build` | TypeScript checks and production frontend assets in `dist/` |
 | `node scripts/validate-discovery.mjs <content-repository>` | Schema, semantic links, asset/material paths, hashes and private claim-pointer consistency for a prepared package |
+| `python scripts/test-prepare-reviewer-package.py` | Small synthetic packing, integrity and extraction tests; no research analysis |
 
 For the current sibling-checkout arrangement:
 
@@ -93,7 +94,7 @@ Each document has four top-level fields:
 | `schemaVersion` | `1` |
 | `visibility` | `public` or `signed-in`; controls the brief, selected inline figures and discussion |
 | `discovery` | ID, title, field/topic, status, summary, timestamp/version, review note, sections and optional question/evidence fields |
-| `materials` | Authoritative `paper`, `appendix`, `figures`, `data` and `repository` entries: null, or a relative path/HTTPS URL with an access policy |
+| `materials` | Authoritative `paper`, `appendix`, `figures`, `data` and `repository` entries: null, or a relative path/HTTPS URL with an access policy; path materials can specify `format: "multipart-zip"` for a complete reviewer package |
 
 The scrolling card uses `title`, `question`, `summary`, `status`, `reviewNote`, `updatedAt` and the figure named by `headlineFigureId`, then links to the detail page. The detail page renders `sections` in order and places each figure beside its matching `sectionId`. Paragraph breaks are retained; optional equations load KaTeX only when needed.
 
@@ -102,6 +103,8 @@ Each figure has `id`, repository-relative PNG `path`, `caption`, `alt` and `sect
 The frontend reads `/v1/portal` and requests images through `/v1/discoveries/{id}/evidence/{figureId}`. It uses the existing SciDA session and revocable browser object URLs. Images stay in the investigation repository; no GitHub credential or private GitHub download URL reaches the browser.
 
 PDFs and downloads use `/v1/discoveries/{id}/materials/{kind}`. A repository `path` is streamed as an authorized attachment. For an HTTPS `url`, the Worker returns the link after authorization; it does not fetch it or send GitHub credentials to the external host. That host controls access after navigation.
+
+For `format: "multipart-zip"`, the path instead identifies the package index. The authorized endpoint returns a file list; `/v1/discoveries/{id}/materials/{kind}/files/{fileId}` rechecks the **same existing material permission** for every file. The Worker serves only declared files from that package directory and never returns private GitHub URLs. The browser verifies each file's length and SHA-256 before saving it, with bounded memory per part. Package metadata never grants an account a role or topic.
 
 Keep all nested `discovery.materials` compatibility slots **null** in repository documents. The top-level map is authoritative; the API generates accessible endpoints. Paths cannot contain traversal, encoded segments, backslashes or URL delimiters. Reuse one PDF path when appendices are in the paper; use null if there is no appendix. Missing and restricted materials have different UI messages.
 
@@ -116,7 +119,7 @@ Public visibility exposes the brief, selected images and rendered discussion thr
 | `reviewer` | Review access for its topic, including current Senior Approver scope or the owner |
 | `admin` | Configured owner identity |
 
-The prepared astronomy records configure public briefs/selected images for a future release, with sign-in required for papers and supporting downloads. They expose no code-repository link. Local preparation does not make these arrangements live.
+The prepared astronomy records configure public briefs/selected images for a future release, with sign-in required for papers and selected supporting downloads. Their **Analysis code** material uses the existing `reviewer` access level for the investigation's topic and points to the complete reviewer package. Direct GitHub access is not required. Local preparation does not make these arrangements live.
 
 GitHub handles identity, passwords and recovery. A researcher's GitHub token establishes identity and verified primary email, then is discarded; repository operations use an App installation token. The browser holds only a revocable SciDA session in `sessionStorage`, for up to eight hours. OAuth uses PKCE, state, a first-party HttpOnly cookie and a single-use exchange code. Logout revokes the session; expiry or HTTP 401 clears the local identity. Configured API failures remain visible and never fabricate accounts or successful actions.
 
@@ -128,9 +131,28 @@ GitHub handles identity, passwords and recovery. A researcher's GitHub token est
 
 Invitations are single-use, expire after seven days and bind to a verified email and exact topics. Revocations govern subsequent permission checks. Profile interests personalize **For you** without granting review access; **Recent discoveries** remains chronological. Scholar links are optional and not scraped. Other users' private email addresses are not published with discussion authors.
 
-Signed-in readers submit code requests with an explanation. Requests are recorded for the requester and administrator. **No email, repository invitation, license grant or code delivery happens automatically.** The owner must handle fulfillment and decide what can be shared. Review permission is not direct GitHub repository access.
+Signed-in readers submit code requests with an explanation. Requests are recorded for the requester and administrator. The administrator handles the request through the existing topic-approval/access workflow. An account already approved for that topic can download its complete analysis package; a request alone grants no access. There is no per-request download grant, automatic email, repository invitation or license grant. Review permission is not direct GitHub repository access.
 
 Keep organization repository base permissions at None and avoid direct collaborator/team access for portal researchers: it bypasses SciDA's restrictions. Owners retain underlying repository access. Keep internal records and correspondence outside public fields and served material/figure maps; describe their purpose without copying their contents into public documentation.
+
+## Complete reviewer packages
+
+The three investigation checkouts contain `reviewer/package.json`, `README.md`, `assemble.py`, `archive.json` and numbered ZIP parts under `reviewer/parts/`. `package.json` records the archive identity and each served file's ID, relative path, byte count and SHA-256. `archive.json` supplies the ordered parts for offline assembly. The original research tree stays intact inside the archive, alongside a concise reviewer guide; original source manifests and scientific bytes are preserved.
+
+The **Analysis code** panel lets an approved reviewer save the complete package to a chosen folder in browsers supporting directory access, or download individual files. Save all files together with their original names, then run `python assemble.py` with Python 3.12. The helper verifies all parts and the complete archive, rejects unsafe ZIP paths, and extracts into a fresh directory without an additional joined-ZIP copy. `python assemble.py --verify-only` checks the download without extraction. Existing destination directories are not overwritten. Directory downloads stop on an error; a retry verifies existing files and refuses to overwrite different content.
+
+To prepare a replacement from a complete, manifest-backed research bundle, run this from the website checkout. Supply your own paths; the tool requires an unused `reviewer/` destination and does not edit the scientific source:
+
+```powershell
+python scripts/prepare-reviewer-package.py --source "../research/GRB180411A_Dust_Echo" --repository "../SciDA-discoveries/discovery-ast-001" --name GRB180411A_Dust_Echo-reviewer
+node scripts/validate-discovery.mjs ../SciDA-discoveries/discovery-ast-001
+```
+
+The Python 3.12 tool needs no extra packages. It verifies the source release inventory, creates deterministic ZIP64 parts of at most 48 MiB, then compares every archived file with the original. It includes all release-manifest inputs, scripts, configurations, locks, manuscript files and retained results. Only unindexed runtime caches are excluded. Individual parts fit the existing [GitHub Contents raw-file interface](https://docs.github.com/en/rest/repos/contents#get-repository-content); no new storage service or Git LFS is used. Preserve `reviewer/** -text` in each content repository so Git cannot change checksummed bytes.
+
+Map the result as `materials.repository: { "path": "reviewer/package.json", "access": "reviewer", "format": "multipart-zip" }`. Keep other material policies unchanged. Packages belong only in the private investigation repositories. Release matching frontend/backend support before the metadata; this preparation does not push or publish any files. Large repository uploads and production downloads still require a later deployment check. Scientific reproduction requirements and limitations, including TOI-475's unverified complete combined replay, are in each reviewer README.
+
+Package parts are committed in batches below 1 GiB, followed by the package index, reviewer guide and material mapping. Preserve that sequence. For a later authorized release, upload successive batch commits to the content branch before its final commit, then review the default-branch merge separately. A single push of the whole GRB or TOI branch can exceed [GitHub's 2 GiB push limit](https://docs.github.com/en/get-started/using-git/troubleshooting-the-2-gb-push-limit); splitting files alone does not remove that limit. Do not squash the data into one oversized commit or rewrite the existing history.
 
 ## Add or update an investigation
 
@@ -183,15 +205,15 @@ The organization homepage uses Vite base `/` and `HashRouter`. Detail-page refre
 
 ## Verification and remaining work
 
-The preceding content implementation passed a production build, backend type checks, **269 automated tests** and the packaged workerd fixture check. These establish specified software behavior, not astronomical validity; the application build and test suite were not repeated for this README-only change.
+The reviewer-package update on **15 October 2026** passed a production build, backend type checks, **298 automated tests**, a fresh Worker dry-run build and the packaged workerd fixture check. Package-specific tests cover authorization before any file read, wrong-topic/Reader denial, revocation between files, unsafe manifests, download checksums and UI handling. These establish specified software behavior, not astronomical validity.
 
-The documentation audit on **15 October 2026** checked source/configuration, package scripts and Vite development/preview CLI help. All 20 relative links and Markdown anchors in this README resolved. The documented three-repository validator command passed schema, semantic, material, asset and provenance checks for all nine PNGs and 29 traced claims. No scientific analyses, environment installations, deployments or secret inspections were performed in this audit.
+The documentation and packaging checks cover relative links, source inventories, relocated entry-point help/plans, required-file closure, archive file identities and the downloaded assembly helper. Nine synthetic packaging tests passed; one filesystem-symlink creation test was skipped because Windows denied that capability. ZIP symlink and traversal tests passed. No scientific analyses, environment installations, deployments or secret inspections were performed in this update.
 
-The deployment guide retains dated reports of owner/Reader sign-in, profile persistence and rejected unauthorized actions. Live reviewer approval and discussion tests were deferred until real discoveries were available and remain unfinished here. Current production connectivity, authenticated local OAuth and secret availability were not rechecked in this documentation-only update.
+The deployment guide retains dated reports of owner/Reader sign-in, profile persistence and rejected unauthorized actions. Live reviewer approval and discussion tests were deferred until real discoveries were available and remain unfinished here. Current production connectivity, authenticated local OAuth and production package downloads were not exercised in this local preparation.
 
 Other operational limitations:
 
-- Browser layout verification for the new figures remains incomplete because the Browser service was unavailable. Figures were inspected separately; component tests do not replace rendered-browser checks.
+- Browser layout verification and the native folder picker remain unverified because browser startup failed. Figures were inspected separately and package controls have component tests; these do not replace a live browser check.
 - Visible tabs refresh every 120 seconds, on focus and manually. Authorization is reread per request; only installation tokens are cached. GitHub/network latency and API/Worker limits constrain throughput. Earlier CPU measurements showed pressure against the then-documented Free allowance; capacity under real authenticated traffic is unresolved.
 - Administrative state uses whole-file SHA-checked writes with bounded retries and an approximately 2 MB read cap. There is no distributed transaction across repositories: revocation can race an already-authorized cross-repository write. Repository/discussion enumeration is bounded.
 - Git history and backups retain prior private data; deleting a current record does not erase historical copies. Define archival, retention and deletion procedures before collecting substantial personal material.

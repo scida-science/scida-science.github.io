@@ -61,6 +61,7 @@ beforeEach(() => {
     signInWithGitHub: success(),
     loadFigure: vi.fn().mockResolvedValue(new Blob([], { type: "image/png" })),
     downloadMaterial: success(),
+    downloadPackageFile: success(),
     signOut: success(),
     refresh: success(),
     saveProfile: success(),
@@ -759,6 +760,23 @@ describe("Public research and real account interface", () => {
         .getByRole("link", { name: "Request access to full paper" })
         .getAttribute("href"),
     ).toBe("/access");
+  });
+
+  it("offers the complete package file list after an authorized code response", async () => {
+    signedIn();
+    portal.state.discoveries.find(row => row.id === "AI-001")!.materials.repository = "authorized-material";
+    const file = { id: "assemble", filename: "assemble.py", size: 1024, sha256: "a".repeat(64), url: "private-endpoint" };
+    vi.mocked(portal.downloadMaterial).mockResolvedValue({ ok: true, message: "Ready", package: {
+      filename: "reviewer.zip", size: 1024, sha256: "b".repeat(64), files: [file],
+    } });
+    const interaction = userEvent.setup();
+    openApp("/discoveries/AI-001");
+    await interaction.click(screen.getByRole("button", { name: "Open analysis code" }));
+    expect(screen.getByRole("heading", { name: "Complete analysis package" })).toBeTruthy();
+    await interaction.click(screen.getByText("Individual files"));
+    await interaction.click(screen.getByRole("button", { name: /assemble.py/ }));
+    expect(portal.downloadPackageFile).toHaveBeenCalledWith("AI-001", "repository", file, undefined);
+    expect(document.body.innerHTML).not.toContain("private-endpoint");
   });
 
   it("lets anonymous readers open a material the server has made public", async () => {

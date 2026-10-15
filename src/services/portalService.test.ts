@@ -509,6 +509,32 @@ describe("permission and session boundaries", () => {
 });
 
 describe("shared writes and authorized materials", () => {
+  it("saves only verified package bytes using the existing authenticated endpoint", async () => {
+    const { service, routes, download, fetcher } = setup({ role: "Reviewer" });
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+    Object.defineProperty(globalThis, "crypto", { configurable: true, value: webcrypto });
+    try {
+      const file = { id: "part001", filename: "analysis.zip.001", size: 7,
+        sha256: createHash("sha256").update("content").digest("hex"), url: "https://ignored.example" };
+      const path = `/v1/discoveries/${discoveries[0].id}/materials/repository/files/part001`;
+      routes.set(path, () => new Response("content"));
+      await service.start();
+      expect((await service.actions.downloadPackageFile(discoveries[0].id, "repository", file)).ok).toBe(true);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "analysis.zip.001");
+      const call = fetcher.mock.calls.find(([url]) => String(url).endsWith(path))!;
+      expect(new Headers(call[1]?.headers).get("Authorization")).toBe(`Bearer ${token}`);
+      expect(fetcher.mock.calls.every(([url]) => String(url).startsWith("https://api.scida.example/"))).toBe(true);
+      download.mockClear();
+      routes.set(path, () => new Response("changed"));
+      expect((await service.actions.downloadPackageFile(discoveries[0].id, "repository", file)).ok).toBe(false);
+      expect(download).not.toHaveBeenCalled();
+      routes.set(path, () => json({ error: "Access revoked" }, 404));
+      expect((await service.actions.downloadPackageFile(discoveries[0].id, "repository", file)).ok).toBe(false);
+      expect(download).not.toHaveBeenCalled();
+    } finally {
+      if (cryptoDescriptor) Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
+    }
+  });
   it("sends editable profile fields without caller-supplied roles or identity", async () => {
     const { service, fetcher } = setup();
     await service.start();
