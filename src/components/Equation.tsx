@@ -10,6 +10,8 @@ export default function Equation({ expression }: { expression: string }) {
           throwOnError: false,
           displayMode: true,
           trust: false,
+          maxExpand: 1000,
+          maxSize: 20,
           output: "htmlAndMathml",
         }),
       }}

@@ -137,6 +137,9 @@ export function validDiscovery(value: unknown): value is Discovery {
     validStatusHistory(value.statusHistory, value.status as Stage) &&
     nonempty(value.summary, 3000) &&
     (value.question === undefined || nonempty(value.question, 500)) &&
+    (value.headlineResult === undefined ||
+      (object(value.headlineResult) && nonempty(value.headlineResult.equation, 4000) &&
+        nonempty(value.headlineResult.caption, 3000))) &&
     validEvidence(value) &&
     nonempty(value.updatedAt, 60) &&
     Number.isFinite(Date.parse(value.updatedAt)) &&

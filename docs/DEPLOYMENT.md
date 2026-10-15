@@ -1,5 +1,54 @@
 # Deploy the SciDA GitHub backend
 
+## Local bandit preparation (15 October 2026)
+
+The `information-optimal-bandits` research checkout now contains one real
+investigation, `PersistentBetting`, with versioned `discovery.json`, the complete
+public `paper.pdf`, a selected PNG figure, and one reviewer-protected ZIP. The
+ZIP combines paper source, analysis and saved results, and pinned Lean source;
+it uses the existing ordinary material download and topic-approval workflow.
+It requires no release assets or new access service. Its repository name is
+descriptive; the internal ID is used only for routing and permissions.
+
+This preparation is local only. No remote research repository has been created,
+no content has been pushed, and no frontend or Worker has been deployed by this
+task. For a future authorized release, keep the research repository private,
+enable Issues, and opt it into discovery with the `scida-discovery` topic. Ship
+the matching frontend/backend support for `headlineResult` before enabling the
+new record on the research repository's default branch. Do not place the paper,
+ZIP, or scientific content in this public website repository.
+
+The public API inspection on 15 October returned only the three real astronomy
+investigations. Historical illustrative repositories remain excluded by the
+backend. The frontend now also requires `illustrative: false`, including after
+refresh errors. Seeds contain empty administrative storage only; simulated
+research, accounts, approvals and discussions stay in test fixtures. Preserve
+existing accounts, discussion Issues, grants and astronomy repositories.
+
+From this website checkout, point `SCIDA_BANDIT_REPOSITORY` to the research
+checkout and optionally `SCIDA_DISCOVERY_ROOT` to the astronomy checkout parent:
+
+```sh
+node scripts/validate-discovery.mjs /path/to/information-optimal-bandits
+npm test -- --maxWorkers=2
+npm run build
+npm run check:backend
+npm run build:backend
+npm run test:worker
+```
+
+The opt-in tests read actual local content without copying it into website
+source. They check overview/detail navigation, mathematical rendering, figure
+references, paper bytes, code requests, approved/wrong-topic/anonymous package
+access, and revocation with in-memory accounts and mocked GitHub transport.
+They do not exercise live OAuth or make production account changes.
+
+The local test suite (458 tests, including the concurrent Archive update), frontend production build, backend typecheck,
+Worker dry build, packaged workerd checks, and content validation for all four
+investigations passed. Browser discovery returned no available browser, so
+desktop/mobile browser layout and interactive download QA remain unperformed.
+The paper and stacked web figure were rendered and visually inspected locally.
+
 The frontend stays at **https://scida-science.github.io/**. The deployed API origin is **https://scida-api.scida-website.workers.dev**. A Cloudflare Worker keeps GitHub credentials off the website. All application data remains in private GitHub files and Issues; no external database, KV, D1, or other storage binding is required.
 
 **Use Workers Free only, with $0 recurring costs. Do not enable a paid plan or chargeable overages.** Workers Free allows 100,000 requests per day and 10 ms of CPU time per invocation; time spent waiting for network responses is separate from CPU time. Measure each authenticated workflow on the deployed Worker, including discussion and profile writes. If limits cause failures, record the failing route and runtime outcome, measure where available, and optimize before considering another hosting option. [Cloudflare pricing](https://developers.cloudflare.com/workers/platform/pricing/), [CPU limits](https://developers.cloudflare.com/workers/platform/limits/).

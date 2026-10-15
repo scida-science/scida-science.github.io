@@ -1,7 +1,7 @@
 # Repository-backed investigation content
 
 The `discovery.json` v1 contract supports optional `question`,
-`headlineFigureId`, `figures` and `statusHistory` fields inside `discovery`.
+`headlineFigureId`, `headlineResult`, `figures` and `statusHistory` fields inside `discovery`.
 Existing active repositories without these fields continue to render. The schema is
 [discovery.schema.json](discovery.schema.json).
 
@@ -13,6 +13,11 @@ Existing active repositories without these fields continue to render. The schema
 - The detail page uses sections in their recorded order. Each figure has an id,
   repository-relative PNG path, caption, alt text and sectionId. The sectionId
   must match an existing section. Paragraph breaks are retained.
+- Theory can use `headlineResult: { equation, caption }` for a mathematical
+  statement on the scrolling page. Use short display-math rows and state the
+  assumptions and symbol meanings in the caption. Section bodies support
+  Markdown links and inline/display mathematics through the same safe renderer
+  as discussions. Standalone section `equation` fields remain supported.
 - Full papers and downloads use the existing top-level materials map. The
   compatibility map inside discovery remains all-null. Reuse one paper path
   for an appendix contained in that paper; leave appendix null if none exists.
@@ -73,8 +78,9 @@ forms from overwriting a concurrent edit. Repository owners can still edit files
 directly on GitHub, so this is not a tamper-proof external audit ledger.
 
 The content-preparation validator uses the JSON Schema and the Worker's runtime
-checks, verifies relative asset/material paths, PNG signatures and file hashes,
-and resolves the internal claim map's JSON Pointers:
+checks, verifies relative asset/material paths, mathematical statements and PNG
+signatures. When an internal manifest/claim-map pair exists, it also verifies
+file hashes and resolves its JSON Pointers:
 
 ```sh
 node scripts/validate-discovery.mjs /path/to/discovery-repository
@@ -86,6 +92,17 @@ scientific-package paths and SHA-256 values of retained evidence snapshots.
 snapshots. The validator checks all listed snapshots without exposing them to
 the frontend. A compact website evidence selection is not a complete executable
 research bundle.
+
+These optional traceability files are retained for the astronomy packages.
+A research repository containing the actual paper, code and results does not
+need duplicate evidence snapshots or an additional audit-document hierarchy.
+If either traceability file is present, both are required and checked.
+
+Compact reviewer packages can use the ordinary single-file material transport:
+`{ "path": "reviewer/information-optimal-bandits-reviewer.zip", "access": "reviewer" }`.
+This uses the same topic approval and download authorization as larger packages.
+Absent materials are hidden, and a theory-only record without a package has no
+code-request control.
 
 ## Approved reviewer packages
 

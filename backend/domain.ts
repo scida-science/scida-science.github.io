@@ -309,6 +309,9 @@ export function createDomain(
             ...(source.statusHistory === undefined ? {} : { statusHistory: publicStatusHistory(source.statusHistory) }),
             summary: source.summary,
             ...(source.question === undefined ? {} : { question: source.question }),
+            ...(source.headlineResult === undefined ? {} : { headlineResult: {
+              equation: source.headlineResult.equation, caption: source.headlineResult.caption,
+            } }),
             ...(source.headlineFigureId === undefined ? {} : { headlineFigureId: source.headlineFigureId }),
             ...(source.figures === undefined ? {} : { figures: source.figures.map((f) => ({
               id: f.id, path: f.path, caption: f.caption, alt: f.alt, sectionId: f.sectionId,
@@ -704,6 +707,7 @@ export function createDomain(
         }] : statusHistory,
         figures: clone(record.document.discovery.figures),
         headlineFigureId: record.document.discovery.headlineFigureId,
+        headlineResult: clone(record.document.discovery.headlineResult),
         materials: clone(record.document.discovery.materials),
         updatedAt: decidedAt,
       } as unknown as Discovery;
@@ -722,6 +726,9 @@ export function createDomain(
         ...(candidate.statusHistory === undefined ? {} : { statusHistory: publicStatusHistory(candidate.statusHistory) }),
         summary: candidate.summary,
         ...(candidate.question === undefined ? {} : { question: candidate.question }),
+        ...(candidate.headlineResult === undefined ? {} : { headlineResult: {
+          equation: candidate.headlineResult.equation, caption: candidate.headlineResult.caption,
+        } }),
         ...(candidate.headlineFigureId === undefined ? {} : { headlineFigureId: candidate.headlineFigureId }),
         ...(candidate.figures === undefined ? {} : { figures: candidate.figures }),
         updatedAt: candidate.updatedAt,

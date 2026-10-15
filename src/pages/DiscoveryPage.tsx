@@ -24,6 +24,7 @@ import ReviewerPackage from "../components/ReviewerPackage";
 import type { ActionResult, Discovery } from "../types";
 
 const Equation = lazy(() => import("../components/Equation"));
+const ResearchMarkdown = lazy(() => import("../components/DiscussionMarkdown"));
 
 const materialNames: Array<{
   key: keyof Discovery["materials"];
@@ -54,12 +55,15 @@ function Materials({ discovery }: { discovery: Discovery }) {
     (r) => r.discoveryId === discovery.id && r.userId === user?.id,
   );
   const hasPackageAccess = Boolean(discovery.materials.repository);
+  const hasPackage = hasPackageAccess || Boolean(discovery.restrictedMaterials?.includes("repository"));
   return (
     <>
       <section className="materials-panel panel">
         <span className="eyebrow">Inspect the evidence</span>
         <h2>Supporting materials</h2>
-        {materialNames.map(({ key, label, icon: Icon }) => (
+        {!materialNames.some(({ key }) => discovery.materials[key] || discovery.restrictedMaterials?.includes(key)) &&
+          <p className="muted">No supporting materials available.</p>}
+        {materialNames.filter(({ key }) => discovery.materials[key] || discovery.restrictedMaterials?.includes(key)).map(({ key, label, icon: Icon }) => (
           <div className="material-row" key={key}>
             <Icon size={18} />
             <div>
@@ -133,7 +137,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
         )}
         {downloadResult?.package && <ReviewerPackage key={`${discovery.id}-${packageKind}`}
           discoveryId={discovery.id} kind={packageKind} bundle={downloadResult.package} />}
-        {!hasPackageAccess && (user && configured ? (
+        {hasPackage && !hasPackageAccess && (user && configured ? (
           <button
             className="btn btn-secondary request-code-button"
             onClick={() => setOpen(!open)}
@@ -152,7 +156,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
             )}
           </p>
         ))}
-        {open && user && configured && !hasPackageAccess && (
+        {open && hasPackage && user && configured && !hasPackageAccess && (
           <form
             className="stack request-form"
             onSubmit={async (e) => {
@@ -238,9 +242,11 @@ function ResearchBrief({ discovery }: { discovery: Discovery }) {
           </span>
           <div>
             <h2>{s.title}</h2>
-            {s.body.split(/\n\s*\n/).map((paragraph, paragraphIndex) => (
-              <p key={paragraphIndex}>{paragraph}</p>
-            ))}
+            <div className="research-markdown discussion-markdown">
+              <Suspense fallback={<p>{s.body}</p>}>
+                <ResearchMarkdown>{s.body}</ResearchMarkdown>
+              </Suspense>
+            </div>
             {discovery.figures?.filter((f) => f.sectionId === s.id).map((f) => (
               <EvidenceFigure key={f.id} discoveryId={discovery.id} figure={f} revision={discovery.revision ?? discovery.updatedAt} expandable />
             ))}

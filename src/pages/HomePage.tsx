@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import EvidenceFigure from "../components/EvidenceFigure";
 import FollowDiscovery from "../components/FollowDiscovery";
 import { Link } from "react-router-dom";
@@ -22,6 +22,7 @@ import { StatusBadge, formatDate } from "../components/Ui";
 import type { Discovery, Field, Stage } from "../types";
 
 type FeedTab = Field | "For you" | "Recent discoveries" | "All fields";
+const Equation = lazy(() => import("../components/Equation"));
 const researchFields = [...new Set(topics.map((topic) => topic.field))];
 const tabId = (tab: FeedTab) =>
   `research-tab-${tab.toLowerCase().replaceAll(" ", "-")}`;
@@ -213,6 +214,12 @@ export default function HomePage({ followingOnly = false, archiveOnly = false }:
                   </h2>
                   {d.question && <p className="discovery-question">{d.question}</p>}
                   <p className="discovery-summary">{d.summary}</p>
+                  {d.headlineResult && <figure className="headline-result">
+                    <Suspense fallback={<p>Loading mathematical result…</p>}>
+                      <Equation expression={d.headlineResult.equation} />
+                    </Suspense>
+                    <figcaption>{d.headlineResult.caption}</figcaption>
+                  </figure>}
                   {d.figures?.filter((f) => f.id === d.headlineFigureId).map((f) => (
                     <EvidenceFigure key={f.id} discoveryId={d.id} figure={f} revision={d.revision ?? d.updatedAt} />
                   ))}
@@ -243,7 +250,7 @@ export default function HomePage({ followingOnly = false, archiveOnly = false }:
                     </p>
                   </div>
                   <div className="card-bottomline">
-                    <span>Read the investigation</span>
+                    <span>Explore research</span>
                     <span>
                       Updated {formatDate(d.updatedAt)} <ArrowRight size={15} />
                     </span>

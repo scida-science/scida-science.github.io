@@ -367,6 +367,16 @@
           "pattern": "^[a-z0-9][a-z0-9-]{0,79}$",
           "description": "Must identify one member of figures; shown on the scrolling page."
         },
+        "headlineResult": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["equation", "caption"],
+          "properties": {
+            "equation": { "type": "string", "minLength": 1, "maxLength": 4000, "pattern": "\\S" },
+            "caption": { "type": "string", "minLength": 1, "maxLength": 3000, "pattern": "\\S" }
+          },
+          "description": "Optional readable mathematical headline. The caption states its assumptions and explains notation. Kept in Git when the browser edits the brief."
+        },
         "figures": {
           "type": "array",
           "maxItems": 12,

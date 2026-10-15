@@ -193,8 +193,8 @@ describe("Public research and real account interface", () => {
       expect(screen.getByText(figure.caption)).toBeTruthy();
     }
     expect(screen.getAllByRole("link", { name: /Open full-size figure/ })).toHaveLength(3);
-    expect(screen.getByText("Context from the manuscript.").tagName).toBe("P");
-    expect(screen.getByText("Limitations from the manuscript.").tagName).toBe("P");
+    expect((await screen.findByText("Context from the manuscript.")).tagName).toBe("P");
+    expect((await screen.findByText("Limitations from the manuscript.")).tagName).toBe("P");
     expect(screen.queryByText(d.id)).toBeNull();
   });
 
@@ -249,7 +249,8 @@ describe("Public research and real account interface", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
       "Reassessing color gradients in faint galaxies",
     );
-    expect(screen.getAllByText("Not uploaded yet")).toHaveLength(5);
+    expect(screen.getByText("No supporting materials available.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Sign in to request code access" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit discovery" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Post comment" })).toBeNull();
   });
@@ -275,7 +276,7 @@ describe("Public research and real account interface", () => {
       </HashRouter>,
     );
     expect(window.location.hash).toBe("#/discoveries/AST-003");
-    expect(screen.getAllByText("Not uploaded yet")).toHaveLength(5);
+    expect(screen.getByText("No supporting materials available.")).toBeTruthy();
   });
 
   it("restores the Archive route and preserves archived discovery links after a refresh", async () => {
@@ -296,7 +297,7 @@ describe("Public research and real account interface", () => {
     expect(screen.getByRole("heading", { level: 1, name: discovery.title })).toBeTruthy();
     expect(screen.getAllByText("Withdrawn").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: /Research discussion/ })).toBeTruthy();
-    expect(screen.getAllByText("Not uploaded yet")).toHaveLength(5);
+    expect(screen.getByText("No supporting materials available.")).toBeTruthy();
   });
 
   it("prioritizes profile expertise without hiding research and keeps a chronological Recent tab", async () => {
@@ -516,6 +517,7 @@ describe("Public research and real account interface", () => {
       screen.getByRole("link", { name: "Sign in or create an account" }),
     ).toBeTruthy();
     view.unmount();
+    portal.state.discoveries.find((row) => row.id === "AI-001")!.restrictedMaterials = ["repository"];
     openApp("/discoveries/AI-001");
     expect(screen.queryByRole("button", { name: "Request code access" })).toBeNull();
     expect(
@@ -597,6 +599,7 @@ describe("Public research and real account interface", () => {
 
   it("reports backend failures rather than claiming a code request was recorded", async () => {
     signedIn();
+    portal.state.discoveries.find((row) => row.id === "AST-001")!.restrictedMaterials = ["repository"];
     vi.mocked(portal.requestCode).mockResolvedValue({
       ok: false,
       message: "Request could not be saved.",
@@ -625,6 +628,7 @@ describe("Public research and real account interface", () => {
 
   it("recovers after an interrupted code request without clearing the explanation or duplicating submission", async () => {
     signedIn();
+    portal.state.discoveries.find((row) => row.id === "AST-001")!.restrictedMaterials = ["repository"];
     let reject!: (reason: Error) => void;
     portal.requestCode = vi.fn(() => new Promise<ActionResult>((_resolve, rejectRequest) => { reject = rejectRequest; }));
     const interaction = userEvent.setup();
@@ -902,7 +906,8 @@ describe("Public research and real account interface", () => {
     )!.restrictedMaterials = ["paper"];
     const view = openApp("/discoveries/AI-001");
     expect(screen.getByText("Restricted material")).toBeTruthy();
-    expect(screen.getAllByText("Not uploaded yet")).toHaveLength(4);
+    expect(screen.queryByText("Not uploaded yet")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Sign in to request code access" })).toBeNull();
     expect(
       screen
         .getByRole("link", { name: "Sign in to access full paper" })

@@ -5,7 +5,8 @@ import { readFile, realpath, stat, lstat } from "node:fs/promises";
 import { resolve, relative, isAbsolute, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
+import katex from "katex";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const schema = JSON.parse(await readFile(resolve(root, "docs/discovery.schema.json"), "utf8"));
@@ -28,6 +29,8 @@ for (const target of targets) {
   ids.add(doc.discovery.id);
   if (Object.values(doc.discovery.materials).some((v) => v !== null))
     throw new Error("Repository compatibility material slots must be null");
+  for (const equation of [doc.discovery.headlineResult?.equation, ...doc.discovery.sections.map((s) => s.equation)].filter(Boolean))
+    katex.renderToString(equation, { throwOnError: true, trust: false, maxExpand: 1000, maxSize: 20 });
   async function checkedPath(path, rejectLinks = false) {
     const actual = await realpath(resolve(repo, path));
     const rel = relative(repo, actual);
@@ -75,8 +78,11 @@ for (const target of targets) {
       throw new Error(`Invalid or oversized PNG: ${figure.path}`);
   }
   const manifestPath = resolve(repo, "internal/source-manifest.json");
+  const claimsPath = resolve(repo, "internal/claims.json");
+  let claimCount = 0;
+  if (existsSync(manifestPath) || existsSync(claimsPath)) {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  const claims = JSON.parse(await readFile(resolve(repo, "internal/claims.json"), "utf8"));
+  const claims = JSON.parse(await readFile(claimsPath, "utf8"));
   const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
   for (const record of [manifest.paper, ...manifest.files, ...claims.figures]) {
     if (digest(await checkedFile(record.path)) !== record.sha256) throw new Error(`Hash mismatch: ${record.path}`);
@@ -93,7 +99,9 @@ for (const target of targets) {
       if (digest(await checkedFile(evidence.path)) !== evidence.sha256) throw new Error(`Claim evidence mismatch: ${claim.id}`);
     }
   }
-  if (doc.discovery.illustrative)
+  claimCount = claims.claims.length;
+  }
+  if (doc.discovery.illustrative !== false)
     throw new Error("Production preparation requires real investigations");
-  console.log(`${doc.discovery.id}: schema, semantic links, ${doc.discovery.figures?.length ?? 0} PNGs, materials and ${claims.claims.length} traced claims passed`);
+  console.log(`${doc.discovery.id}: schema, mathematical statements, semantic links, ${doc.discovery.figures?.length ?? 0} PNGs, materials and ${claimCount} optional traced claims passed`);
 }

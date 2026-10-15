@@ -2836,3 +2836,13 @@ input[readonly] {
 }
 .brief-section p { white-space: pre-line; }
 .brief-section p + p { margin-top: 1em; }
+.headline-result { margin: 1.5rem 0; min-width: 0; }
+.headline-result .equation { margin-top: 0; }
+.headline-result figcaption { margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6; color: var(--muted); }
+.research-markdown { font: inherit; color: inherit; }
+.research-markdown p { white-space: normal; }
+.research-markdown a { text-decoration: underline; text-underline-offset: 0.2em; }
+.research-markdown code { overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .headline-result .katex { font-size: 0.95em; }
+}

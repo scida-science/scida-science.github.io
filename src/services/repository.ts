@@ -60,7 +60,7 @@ export function createPortalRepository(client: ApiClient) {
         state: {
           ...result.state,
           // Old illustrative repositories must not reappear in a real research feed.
-          discoveries: result.state.discoveries.filter((discovery) => discovery.illustrative !== true),
+          discoveries: result.state.discoveries.filter((discovery) => discovery.illustrative === false),
         },
       };
     },

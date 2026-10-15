@@ -32,6 +32,7 @@ export interface Section {
 }
 export interface Discovery {
   question?: string;
+  headlineResult?: { equation: string; caption: string };
   headlineFigureId?: string;
   figures?: EvidenceFigure[];
   /** API-only source revision, used to prevent overwriting newer GitHub edits. */

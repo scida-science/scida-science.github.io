@@ -800,8 +800,9 @@ describe("shared writes and authorized materials", () => {
   it("does not display legacy illustrative research returned by a connected backend", async () => {
     const { service, routes } = setup({ signedIn: false });
     const realRecord = { ...discoveries[0], id: "real-repository-record", illustrative: false };
+    const unmarkedLegacy = { ...discoveries[0], id: "unmarked-legacy", illustrative: undefined };
     routes.set("/v1/portal", () => json({
-      state: { ...emptyPortalState(), discoveries: [...discoveries, realRecord] }, user: null,
+      state: { ...emptyPortalState(), discoveries: [...discoveries, unmarkedLegacy, realRecord] }, user: null,
     }));
     await service.start();
     expect(service.getSnapshot().state.discoveries).toEqual([realRecord]);
