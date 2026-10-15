@@ -164,7 +164,7 @@ interface IssueRow {
   number: number;
   body: string | null;
   pull_request?: unknown;
-  performed_via_github_app?: { id: number };
+  performed_via_github_app?: unknown;
   user?: { type: string };
 }
 
@@ -373,10 +373,18 @@ export class GitHubRepositoryStore implements GitHubStore {
     }
   }
   private decodeDiscussion(row: IssueRow): DiscussionComment | null {
+    // GitHub can return null here even for issues created by this App. The
+    // signed envelope remains mandatory; supplied App metadata must also match.
+    const app = row.performed_via_github_app;
     if (
-      String(row.performed_via_github_app?.id) !== this.api.env.GITHUB_APP_ID ||
+      (app != null &&
+        (!object(app) ||
+          typeof app.id !== "number" ||
+          !Number.isSafeInteger(app.id) ||
+          String(app.id) !== this.api.env.GITHUB_APP_ID)) ||
       row.user?.type !== "Bot" ||
-      !row.body?.startsWith(marker)
+      typeof row.body !== "string" ||
+      !row.body.startsWith(marker)
     )
       return null;
     const encoded = row.body.slice(marker.length).split(" -->", 1)[0];

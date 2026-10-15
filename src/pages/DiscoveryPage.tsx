@@ -33,14 +33,14 @@ const materialNames: Array<{
   { key: "appendix", label: "Appendix", icon: BookOpen },
   { key: "figures", label: "Figures", icon: Image },
   { key: "data", label: "Data", icon: Database },
-  { key: "repository", label: "Analysis code", icon: Code2 },
+  { key: "repository", label: "Analysis package", icon: Code2 },
 ];
 function Materials({ discovery }: { discovery: Discovery }) {
   const { state, user, requestCode, downloadMaterial, configured, error } =
     usePortal();
   const [open, setOpen] = useState(false);
   const [explanation, setExplanation] = useState("");
-  const [message, setMessage] = useState("");
+  const [requestResult, setRequestResult] = useState<ActionResult | null>(null);
   const [pending, setPending] = useState(false);
   const [downloading, setDownloading] = useState<
     keyof Discovery["materials"] | null
@@ -52,6 +52,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
   const requests = state.codeRequests.filter(
     (r) => r.discoveryId === discovery.id && r.userId === user?.id,
   );
+  const hasPackageAccess = Boolean(discovery.materials.repository);
   return (
     <>
       <section className="materials-panel panel">
@@ -62,6 +63,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
             <Icon size={18} />
             <div>
               <strong>{label}</strong>
+              {key === "repository" && <span>Code, data, and reproduction instructions.</span>}
               {discovery.materials[key] ? (
                 configured ? (
                   <button
@@ -91,7 +93,7 @@ function Materials({ discovery }: { discovery: Discovery }) {
                     {downloading === key
                       ? "Opening…"
                       : key === "repository"
-                        ? "Open analysis code"
+                        ? "Open analysis package"
                         : `Open ${label.toLowerCase()}`}
                   </button>
                 ) : (
@@ -101,19 +103,22 @@ function Materials({ discovery }: { discovery: Discovery }) {
                 )
               ) : discovery.restrictedMaterials?.includes(key) ? (
                 <>
-                  <span>Restricted material</span>
-                  <Link
+                  <span>{key === "repository" ? "Approval required" : "Restricted material"}</span>
+                  {key !== "repository" && <Link
                     to={user ? "/access" : "/login"}
                     aria-label={`${user ? "Request access to" : "Sign in to access"} ${label.toLowerCase()}`}
                   >
                     {user
                       ? "Request topic-specific access"
                       : "Sign in to inspect access"}
-                  </Link>
+                  </Link>}
                 </>
               ) : (
                 <span>Not uploaded yet</span>
               )}
+              {key === "repository" && configured && hasPackageAccess && <span>
+                {user ? "Your account has access." : "Available to download."}
+              </span>}
             </div>
           </div>
         ))}
@@ -127,34 +132,42 @@ function Materials({ discovery }: { discovery: Discovery }) {
         )}
         {downloadResult?.package && <ReviewerPackage key={`${discovery.id}-${packageKind}`}
           discoveryId={discovery.id} kind={packageKind} bundle={downloadResult.package} />}
-        {user && configured ? (
+        {!hasPackageAccess && (user && configured ? (
           <button
             className="btn btn-secondary request-code-button"
             onClick={() => setOpen(!open)}
             aria-expanded={open}
+            disabled={pending}
           >
             <Code2 size={16} />
-            {open ? "Close request form" : "Request code"}
+            {open ? "Close request form" : "Request code access"}
           </button>
         ) : (
           <p className="muted">
             {configured ? (
-              <Link to="/login">Sign in to request code</Link>
+              <Link to="/login">Sign in to request code access</Link>
             ) : (
               "Code requests are unavailable until account services are connected."
             )}
           </p>
-        )}
-        {open && user && (
+        ))}
+        {open && user && configured && !hasPackageAccess && (
           <form
             className="stack request-form"
             onSubmit={async (e) => {
               e.preventDefault();
+              if (pending) return;
               setPending(true);
-              const result = await requestCode(discovery.id, explanation);
-              setPending(false);
-              setMessage(result.message);
-              if (result.ok) setExplanation("");
+              setRequestResult(null);
+              try {
+                const result = await requestCode(discovery.id, explanation);
+                setRequestResult(result);
+                if (result.ok) setExplanation("");
+              } catch {
+                setRequestResult({ ok: false, message: "The code request could not be submitted. Please try again." });
+              } finally {
+                setPending(false);
+              }
             }}
           >
             <label className="field">
@@ -177,11 +190,12 @@ function Materials({ discovery }: { discovery: Discovery }) {
             </button>
             <small className="muted">
               Your request is shared with the administrator. Submitting does not
-              automatically grant repository access.
+              automatically grant access to the analysis package.
             </small>
-            {message && (
-              <p className="notice" role="status">
-                {message}
+            {requestResult && (
+              <p className={`notice ${requestResult.ok ? "notice-success" : "notice-error"}`}
+                role={requestResult.ok ? "status" : "alert"}>
+                {requestResult.message}
               </p>
             )}
           </form>

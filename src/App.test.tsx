@@ -495,9 +495,9 @@ describe("Public research and real account interface", () => {
     ).toBeTruthy();
     view.unmount();
     openApp("/discoveries/AI-001");
-    expect(screen.queryByRole("button", { name: "Request code" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Request code access" })).toBeNull();
     expect(
-      screen.getByRole("link", { name: "Sign in to request code" }),
+      screen.getByRole("link", { name: "Sign in to request code access" }),
     ).toBeTruthy();
   });
 
@@ -582,7 +582,7 @@ describe("Public research and real account interface", () => {
     const interaction = userEvent.setup();
     openApp("/discoveries/AST-001");
     await interaction.click(
-      screen.getByRole("button", { name: "Request code" }),
+      screen.getByRole("button", { name: "Request code access" }),
     );
     await interaction.type(
       screen.getByLabelText("Why would you like access?"),
@@ -595,9 +595,28 @@ describe("Public research and real account interface", () => {
       "AST-001",
       "I want to reproduce the cadence analysis.",
     );
-    expect(screen.getByRole("status").textContent).toBe(
+    expect(screen.getByRole("alert").textContent).toBe(
       "Request could not be saved.",
     );
+    expect(screen.queryByText("Your code requests (1)")).toBeNull();
+  });
+
+  it("recovers after an interrupted code request without clearing the explanation or duplicating submission", async () => {
+    signedIn();
+    let reject!: (reason: Error) => void;
+    portal.requestCode = vi.fn(() => new Promise<ActionResult>((_resolve, rejectRequest) => { reject = rejectRequest; }));
+    const interaction = userEvent.setup();
+    openApp("/discoveries/AST-001");
+    await interaction.click(screen.getByRole("button", { name: "Request code access" }));
+    const explanation = screen.getByLabelText("Why would you like access?");
+    await interaction.type(explanation, "I would like to reproduce the documented analysis.");
+    await interaction.click(screen.getByRole("button", { name: "Submit code request" }));
+    expect((screen.getByRole("button", { name: "Submitting…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(portal.requestCode).toHaveBeenCalledOnce();
+    await act(async () => reject(new Error("Network disconnected")));
+    expect(screen.getByRole("alert").textContent).toBe("The code request could not be submitted. Please try again.");
+    expect((screen.getByRole("button", { name: "Submit code request" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((explanation as HTMLTextAreaElement).value).toBe("I would like to reproduce the documented analysis.");
     expect(screen.queryByText("Your code requests (1)")).toBeNull();
   });
 
@@ -886,12 +905,37 @@ describe("Public research and real account interface", () => {
     } });
     const interaction = userEvent.setup();
     openApp("/discoveries/AI-001");
-    await interaction.click(screen.getByRole("button", { name: "Open analysis code" }));
+    expect(screen.getByText("Your account has access.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Request code access" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /request code/i })).toBeNull();
+    await interaction.click(screen.getByRole("button", { name: "Open analysis package" }));
     expect(screen.getByRole("heading", { name: "Complete analysis package" })).toBeTruthy();
     await interaction.click(screen.getByText("Individual files"));
     await interaction.click(screen.getByRole("button", { name: /assemble.py/ }));
     expect(portal.downloadPackageFile).toHaveBeenCalledWith("AI-001", "repository", file, undefined);
     expect(document.body.innerHTML).not.toContain("private-endpoint");
+  });
+
+  it("offers one code-access request action for a restricted package and no request to authorized administrators", async () => {
+    const discovery = portal.state.discoveries.find((row) => row.id === "AI-001")!;
+    discovery.restrictedMaterials = ["repository"];
+    let view = openApp("/discoveries/AI-001");
+    expect(screen.getAllByRole("link", { name: "Sign in to request code access" })).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "Sign in to access analysis package" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open analysis package" })).toBeNull();
+    view.unmount();
+    signedIn();
+    view = openApp("/discoveries/AI-001");
+    expect(screen.getAllByRole("button", { name: "Request code access" })).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "Request access to analysis package" })).toBeNull();
+    expect(screen.getByText("Approval required")).toBeTruthy();
+    view.unmount();
+    signedIn({ ...researcher, role: "Admin" });
+    discovery.materials.repository = "authorized-material";
+    openApp("/discoveries/AI-001");
+    expect(screen.getByRole("button", { name: "Open analysis package" })).toBeTruthy();
+    expect(screen.getByText("Your account has access.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Request code access" })).toBeNull();
   });
 
   it("lets anonymous readers open a material the server has made public", async () => {

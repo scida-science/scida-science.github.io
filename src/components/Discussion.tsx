@@ -19,6 +19,7 @@ function CommentForm({
   const [body, setBody] = useState("");
   const [reference, setReference] = useState(parent?.reference ?? "");
   const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
   const prefix = parent?.id ?? "new-comment";
   return (
@@ -26,20 +27,30 @@ function CommentForm({
       className="comment-form"
       onSubmit={async (e) => {
         e.preventDefault();
+        if (pending) return;
         setPending(true);
-        const result = await addComment({
-          discoveryId: discovery.id,
-          parentId: parent?.id ?? null,
-          version: parent?.version ?? discovery.version,
-          reference,
-          body,
-        });
-        setPending(false);
-        setMessage(result.message);
-        if (result.ok) {
-          setBody("");
-          setReference("");
-          onDone?.();
+        setMessage("");
+        setFailed(false);
+        try {
+          const result = await addComment({
+            discoveryId: discovery.id,
+            parentId: parent?.id ?? null,
+            version: parent?.version ?? discovery.version,
+            reference,
+            body,
+          });
+          setMessage(result.message);
+          setFailed(!result.ok);
+          if (result.ok) {
+            setBody("");
+            setReference("");
+            onDone?.();
+          }
+        } catch {
+          setFailed(true);
+          setMessage("Posting could not be confirmed. Your draft is preserved; refresh the discussion before trying again.");
+        } finally {
+          setPending(false);
         }
       }}
     >
@@ -84,7 +95,7 @@ function CommentForm({
         </button>
       </div>
       {message && (
-        <p className="notice" role="status">
+        <p className={`notice ${failed ? "notice-error" : "notice-success"}`} role={failed ? "alert" : "status"}>
           {message}
         </p>
       )}

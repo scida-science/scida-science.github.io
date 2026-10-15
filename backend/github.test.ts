@@ -610,6 +610,50 @@ describe("Private administrative records and SHA concurrency", () => {
 });
 
 describe("Authenticated, versioned GitHub discussions", () => {
+  it.each(["omitted", "null"])("reads signed roots and nested replies when GitHub App metadata is %s", async (metadata) => {
+    const root = comment("root");
+    const reply = comment("reply", { parentId: root.id });
+    const nested = comment("nested", { parentId: reply.id });
+    const githubRow = (number: number, value: DiscussionComment) => {
+      const row: Record<string, unknown> = issue(number, value);
+      if (metadata === "omitted") delete row.performed_via_github_app;
+      else row.performed_via_github_app = null;
+      return row;
+    };
+    const { store } = harness((url) => json(
+      url.pathname.endsWith("/issues")
+        ? [githubRow(1, root)]
+        : [githubRow(2, reply), githubRow(3, nested)],
+    ));
+    expect(await store.readComments(record())).toEqual([root, reply, nested]);
+  });
+
+  it.each([{}, { id: "222" }, { id: null }, { id: 999 }, { id: 222.5 }, [], false, 222])(
+    "rejects explicitly malformed or foreign App metadata even with a valid signature: %j",
+    async (metadata) => {
+      const { store, fetcher } = harness(() => json([
+        issue(1, comment("root"), { performed_via_github_app: metadata }),
+      ]));
+      expect(await store.readComments(record())).toEqual([]);
+      expect(fetcher).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("still rejects human, unsigned and tampered entries when App metadata is unavailable", async () => {
+    const root = comment("root");
+    const payload = Buffer.from(JSON.stringify(root)).toString("base64url");
+    const changed = Buffer.from(JSON.stringify({ ...root, authorId: "101", body: "Altered content." })).toString("base64url");
+    const rows = [
+      issue(1, root, { performed_via_github_app: null, user: { type: "User" } }),
+      issue(2, root, { performed_via_github_app: null, body: `<!-- scida-discussion-v1:${payload} -->` }),
+      issue(3, root, { performed_via_github_app: null, body: signedBody(root).replace(payload, changed) }),
+      issue(4, root, { performed_via_github_app: undefined, body: signedBody(root, "foreign-secret") }),
+      issue(5, root, { performed_via_github_app: null, body: "Manually created discussion" }),
+    ];
+    const { store } = harness(() => json(rows));
+    expect(await store.readComments(record())).toEqual([]);
+  });
+
   it("paginates issues and replies, preserving nested parent relationships and manuscript versions", async () => {
     const root = comment("root");
     const reply = comment("reply", { parentId: root.id });
@@ -756,8 +800,8 @@ describe("Authenticated, versioned GitHub discussions", () => {
       }
       return json(
         url.pathname.endsWith("/issues")
-          ? [issue(17, root)]
-          : [issue(18, existing)],
+          ? [issue(17, root, { performed_via_github_app: null })]
+          : [issue(18, existing, { performed_via_github_app: undefined })],
       );
     });
     await store.addComment(record(), comment("new-root"));

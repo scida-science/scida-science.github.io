@@ -128,13 +128,13 @@ describe.skipIf(!sourceRoot)("prepared astronomy content in the website", () => 
       }
       expect(screen.getAllByRole("link", { name: /Open full-size figure/ })).toHaveLength(3);
       expect(screen.queryByText(discovery.id)).toBeNull();
-      expect(screen.getByRole("link", { name: "Sign in to request code" }).getAttribute("href")).toBe("/login");
+      expect(screen.getByRole("link", { name: "Sign in to request code access" }).getAttribute("href")).toBe("/login");
       await interaction.click(screen.getByRole("button", { name: "Open full paper" }));
       expect(portal.downloadMaterial).toHaveBeenLastCalledWith(discovery.id, "paper");
       view.unmount();
       portal.user = { ...account };
       const signedIn = open(`/discoveries/${discovery.id}`);
-      await interaction.click(screen.getByRole("button", { name: "Request code" }));
+      await interaction.click(screen.getByRole("button", { name: "Request code access" }));
       await interaction.type(screen.getByRole("textbox", { name: "Why would you like access?" }), "Review the documented analysis and reproduction instructions.");
       await interaction.click(screen.getByRole("button", { name: "Submit code request" }));
       expect(portal.requestCode).toHaveBeenLastCalledWith(discovery.id, "Review the documented analysis and reproduction instructions.");
@@ -156,7 +156,9 @@ describe.skipIf(!sourceRoot)("prepared astronomy content in the website", () => 
       };
       vi.mocked(portal.downloadMaterial).mockResolvedValue({ ok: true, message: "Ready.", package: bundle });
       const view = open(`/discoveries/${discovery.id}`);
-      await interaction.click(screen.getByRole("button", { name: "Open analysis code" }));
+      expect(screen.getByText("Your account has access.")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Request code access" })).toBeNull();
+      await interaction.click(screen.getByRole("button", { name: "Open analysis package" }));
       const panel = screen.getByRole("region", { name: "Complete reviewer package" });
       await interaction.click(within(panel).getByText("Individual files"));
       expect(within(panel).getAllByRole("button")).toHaveLength(manifest.files.length);
