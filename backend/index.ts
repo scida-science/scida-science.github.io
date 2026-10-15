@@ -137,7 +137,7 @@ export async function handleRequest(
             if (parts.length === 7) {
               const file = manifest.files.find((candidate) => candidate.id === parts[6]);
               if (!file) throw new HttpError(404, "Package file not found.");
-              response = await store.materialFile(record, file.path);
+              response = await store.packageFile(record, file);
             } else {
               const base = `${env.API_ORIGIN.replace(/\/$/, "")}/v1/discoveries/${encodeURIComponent(parts[2])}/materials/${encodeURIComponent(parts[4])}/files/`;
               response = json({ package: {

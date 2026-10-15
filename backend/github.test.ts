@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { discoveries } from "../src/data/discoveries";
+import { discoveries } from "../test/fixtures/discoveries";
 import type { DiscussionComment } from "../src/types";
 import type { Env } from "./env";
 import * as cryptography from "./crypto";
@@ -62,7 +62,7 @@ function document(): DiscoveryDocument {
   return {
     schemaVersion: 1,
     visibility: "public",
-    discovery: structuredClone(discoveries[0]),
+    discovery: { ...structuredClone(discoveries[0]), illustrative: false },
     materials: {
       paper: null,
       appendix: null,
@@ -195,6 +195,24 @@ describe("GitHub installation token initialization", () => {
 });
 
 describe("GitHub repository discovery and file schema", () => {
+  it("imports descriptive repositories opted in by topic and never imports historical placeholders", async () => {
+    const real = document();
+    const placeholder = document();
+    placeholder.discovery.illustrative = true;
+    const { store, fetcher } = harness((url) => {
+      if (url.pathname === "/installation/repositories") return json({ repositories: [
+        repository("Object_Analysis", { topics: ["scida-discovery"] }),
+        repository("discovery-legacy"),
+        repository("Unrelated_Private"),
+        repository("scida-admin", { topics: ["scida-discovery"] }),
+      ] });
+      return json(file(url.pathname.includes("discovery-legacy") ? placeholder : real));
+    });
+    expect((await store.listDiscoveries()).map((item) => item.repository)).toEqual(["Object_Analysis"]);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("Unrelated_Private"))).toBe(false);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("scida-admin"))).toBe(false);
+  });
+
   it("overlaps independent discovery reads with a bounded number of requests", async () => {
     vi.useFakeTimers();
     const repos = Array.from({ length: 6 }, (_, index) =>

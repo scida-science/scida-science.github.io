@@ -1,30 +1,6 @@
-import type { Discovery, Topic } from "../types";
+import type { Discovery } from "../../src/types";
 
-export const topics: Topic[] = [
-  {
-    id: "bandit-theory",
-    label: "Bandit theory",
-    field: "Artificial Intelligence",
-  },
-  {
-    id: "machine-learning",
-    label: "Machine learning",
-    field: "Artificial Intelligence",
-  },
-  {
-    id: "scientific-ai",
-    label: "Scientific AI",
-    field: "Artificial Intelligence",
-  },
-  {
-    id: "time-domain-astronomy",
-    label: "Time-domain astronomy",
-    field: "Astronomy",
-  },
-  { id: "exoplanets", label: "Exoplanets", field: "Astronomy" },
-  { id: "galaxy-evolution", label: "Galaxy evolution", field: "Astronomy" },
-];
-
+// Test-only records: never import this module into application runtime code.
 // All records below are fictional examples. Stage labels demonstrate the workflow;
 // they do not report real validation, publication, or scientific discoveries.
 export const discoveries: Discovery[] = [

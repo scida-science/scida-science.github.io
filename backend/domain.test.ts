@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { discoveries } from "../src/data/discoveries";
+import { discoveries } from "../test/fixtures/discoveries";
 import type { Discovery, DiscussionComment, ProfileInput } from "../src/types";
 import { createDomain, validDiscoveryDocument } from "./domain";
 import { emptyAdminState, HttpError, validMaterial } from "./model";

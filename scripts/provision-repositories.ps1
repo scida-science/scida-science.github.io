@@ -19,7 +19,7 @@ function Invoke-RepositoryApi {
 $membership=Invoke-RepositoryApi -Path "/user/memberships/orgs/$Organization"
 if ($membership.state -ne 'active' -or $membership.role -ne 'admin') { throw 'An active organization owner must run this setup.' }
 $seeds = node (Join-Path $PSScriptRoot 'repository-seeds.mjs') | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'Could not read illustrative repository templates.' }
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the empty administrative repository template.' }
 foreach ($seed in $seeds) {
   $repoPath="/repos/$Organization/$($seed.name)"
   try { $repo=Invoke-RepositoryApi -Path $repoPath }

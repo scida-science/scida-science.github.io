@@ -2534,5 +2534,7 @@ input[readonly] {
 .evidence-figure { margin: 1.5rem 0; }
 .evidence-figure img { display: block; width: 100%; height: auto; background: white; border-radius: 0.5rem; }
 .evidence-figure figcaption { margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6; color: var(--muted); }
+.figure-enlarge { display: inline-block; margin-top: 0.75rem; font-size: 0.875rem; text-underline-offset: 0.2em; }
 .discovery-question { font-weight: 600; }
 .brief-section p { white-space: pre-line; }
+.brief-section p + p { margin-top: 1em; }

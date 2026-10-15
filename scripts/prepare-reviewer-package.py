@@ -2,7 +2,8 @@
 
 Python 3.12 standard library only. Scientific files are read, never modified.
 Output is reviewer/{package.json,archive.json,README.md,assemble.py,parts/...}.
-The ZIP64 byte stream is split below GitHub's individual-file size limit.
+The ZIP64 byte stream is split for bounded-memory protected release downloads.
+Keep numbered ZIP parts out of Git history; upload them as private release assets.
 """
 from __future__ import annotations
 
@@ -388,6 +389,8 @@ def build(source: Path, repository: Path, name: str, part_size=PART_SIZE):
             files.append({'id': file_id, 'path': 'reviewer/' + relative, 'size': path.stat().st_size, 'sha256': sha256(path)})
         package = {'schemaVersion': 1, 'filename': filename, 'size': index['size'], 'sha256': index['sha256'], 'files': files}
         (temporary / 'package.json').write_bytes(json_bytes(package))
+        # Archive bytes are release assets, never ordinary Git history.
+        (temporary / '.gitignore').write_text('parts/\n*.asset-upload.tmp\n', encoding='utf-8')
         # Both resolved targets are checked within the explicit repository before moving.
         if temporary.parent != repository or destination.resolve().parent != repository or destination.exists():
             raise ValueError('Unsafe or occupied final package destination')

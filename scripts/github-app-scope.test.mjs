@@ -6,8 +6,8 @@ const repository = (name, changes = {}) => ({
   owner: { login: 'scida-science', type: 'Organization' }, ...changes,
 });
 const initial = () => [
-  'scida-admin', 'discovery-ai-001', 'discovery-ai-002', 'discovery-ai-003',
-  'discovery-ast-001', 'discovery-ast-002', 'discovery-ast-003',
+  'scida-admin', 'GRB180411A_Dust_Echo', 'TOI475_Ephemeris_Discrepancy',
+  'TIC233166139_APOGEE_Mass_Ratio',
 ].map((name) => repository(name));
 const installation = (changes = {}) => ({
   id: 42, app_id: 123, account: { id: 456, login: 'scida-science', type: 'Organization' },
@@ -38,14 +38,13 @@ describe('GitHub App repository scope', () => {
       repository('discovery-new-topic'),
     ];
     expect(validateRepositories(rows, 'all')).toEqual([
-      'discovery-ai-001', 'discovery-ai-002', 'discovery-ai-003',
-      'discovery-ast-001', 'discovery-ast-002', 'discovery-ast-003',
+      'GRB180411A_Dust_Echo', 'TIC233166139_APOGEE_Mass_Ratio', 'TOI475_Ephemeris_Discrepancy',
       'discovery-new-topic', 'scida-admin',
     ]);
   });
 
   it('keeps the existing selected-repository setup valid', () => {
-    expect(validateRepositories(initial(), 'selected')).toHaveLength(7);
+    expect(validateRepositories(initial(), 'selected')).toHaveLength(4);
   });
 
   it('keeps unrelated repositories excluded from a selected installation', () => {
@@ -69,16 +68,16 @@ describe('GitHub App repository scope', () => {
 
   it('does not require Issues on the administrative repository', () => {
     const rows = initial().map((row) => row.name === 'scida-admin' ? { ...row, has_issues: false } : row);
-    expect(validateRepositories(rows, 'all')).toHaveLength(7);
+    expect(validateRepositories(rows, 'all')).toHaveLength(4);
   });
 
-  it.each(['scida-admin', 'discovery-ai-001'])('rejects missing required storage %s', (name) => {
+  it.each(['scida-admin', 'GRB180411A_Dust_Echo'])('rejects missing required storage %s', (name) => {
     expect(() => validateRepositories(initial().filter((row) => row.name !== name), 'all'))
-      .toThrow('Allow access to scida-admin and all six existing discovery repositories');
+      .toThrow('Allow access to scida-admin and the three named astronomy investigation repositories');
   });
 
   it('rejects duplicate names including casing differences', () => {
-    expect(() => validateRepositories([...initial(), repository('DISCOVERY-AI-001')], 'all'))
+    expect(() => validateRepositories([...initial(), repository('grb180411a_dust_echo')], 'all'))
       .toThrow('unique repositories');
   });
 

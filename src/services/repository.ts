@@ -54,7 +54,14 @@ export function createPortalRepository(client: ApiClient) {
         throw new Error(
           "The API returned private account data without an active session.",
         );
-      return result;
+      return {
+        ...result,
+        state: {
+          ...result.state,
+          // Old illustrative repositories must not reappear in a real research feed.
+          discoveries: result.state.discoveries.filter((discovery) => discovery.illustrative !== true),
+        },
+      };
     },
     saveProfile: (input: ProfileInput) =>
       client.request<void>("/v1/profile", { input }),

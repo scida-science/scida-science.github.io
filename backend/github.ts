@@ -9,6 +9,7 @@ import {
   type GitHubStore,
   type StoredDiscovery,
   type ReviewerPackage,
+  type ReviewerPackageFile,
 } from "./model";
 import type { DiscussionComment } from "../src/types";
 import { validDiscovery } from "../src/services/validation";
@@ -156,6 +157,7 @@ interface Repo {
   name: string;
   private: boolean;
   archived: boolean;
+  topics?: string[];
   owner: { login: string };
 }
 interface IssueRow {
@@ -303,7 +305,8 @@ export class GitHubRepositoryStore implements GitHubStore {
         !repo.archived &&
         repo.owner.login.toLowerCase() ===
           this.api.env.GITHUB_ORG.toLowerCase() &&
-        repo.name.startsWith("discovery-"),
+        repo.name !== this.api.env.ADMIN_REPOSITORY &&
+        (repo.topics?.includes("scida-discovery") || repo.name.startsWith("discovery-")),
     );
     // Independent documents need no serial round trips. Keep each read fresh
     // and cap concurrency to avoid an unbounded burst against GitHub.
@@ -326,6 +329,9 @@ export class GitHubRepositoryStore implements GitHubStore {
                 503,
                 "A discovery repository has an invalid discovery.json.",
               );
+            // Historical example repositories stay intact, but can never reappear
+            // in the production feed or its discovery/material routes.
+            if (value.discovery.illustrative !== false) return null;
             return { repository: repo.name, sha, document: value };
           } catch (error) {
             if (error instanceof GitHubError && error.status === 404)
@@ -575,5 +581,45 @@ export class GitHubRepositoryStore implements GitHubStore {
         "X-Content-Type-Options": "nosniff",
       },
     });
+  }
+
+  async packageFile(record: StoredDiscovery, file: ReviewerPackageFile): Promise<Response> {
+    if (file.releaseAssetId === undefined) return this.materialFile(record, file.path);
+    // The repository-owned manifest pins the asset identity. Never accept a URL,
+    // repository or asset ID from the caller, and never forward App credentials
+    // beyond api.github.com. Authorization is repeated before each call here.
+    const name = file.path.split("/").at(-1)!;
+    const assetPath = `${this.repoPath(record.repository)}/releases/assets/${file.releaseAssetId}`;
+    const metadata = await this.api.request<{ id: number; name: string; size: number; state: string; digest?: string | null }>(assetPath);
+    if (metadata.id !== file.releaseAssetId || metadata.name !== name || metadata.size !== file.size ||
+        metadata.state !== "uploaded" || (metadata.digest && metadata.digest !== `sha256:${file.sha256}`))
+      throw new HttpError(503, "The analysis package file does not match its recorded identity.");
+    let response = await this.api.raw(assetPath, { headers: { Accept: "application/octet-stream" } });
+    if (response.status === 302) {
+      const location = response.headers.get("Location");
+      await response.body?.cancel();
+      let target: URL;
+      try { target = new URL(location ?? ""); }
+      catch { throw new HttpError(503, "The analysis package download is unavailable."); }
+      if (target.protocol !== "https:" || target.port || target.username || target.password || target.hash ||
+          !["release-assets.githubusercontent.com", "objects.githubusercontent.com"].includes(target.hostname))
+        throw new HttpError(503, "The analysis package download is unavailable.");
+      response = await this.api.fetcher(target.toString(), {
+        method: "GET", redirect: "manual", headers: { Accept: "application/octet-stream" },
+      });
+    }
+    if (response.status !== 200 || (response.headers.has("Content-Length") &&
+        Number(response.headers.get("Content-Length")) !== file.size)) {
+      await response.body?.cancel();
+      throw new HttpError(503, "The analysis package file could not be retrieved.");
+    }
+    // Pass the stream through unchanged: a 48 MiB part never enters Worker heap
+    // or a hashing loop. The browser verifies the recorded SHA-256 before saving.
+    return new Response(response.body, { headers: {
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${name}"`,
+      "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+    } });
   }
 }

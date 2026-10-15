@@ -13,7 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
-import { topics } from "../data/discoveries";
+import { topics } from "../data/topics";
 import { StatusBadge, formatDate } from "../components/Ui";
 import Discussion from "../components/Discussion";
 import DiscoveryEditor from "../components/DiscoveryEditor";
@@ -222,9 +222,11 @@ function ResearchBrief({ discovery }: { discovery: Discovery }) {
           </span>
           <div>
             <h2>{s.title}</h2>
-            <p>{s.body}</p>
+            {s.body.split(/\n\s*\n/).map((paragraph, paragraphIndex) => (
+              <p key={paragraphIndex}>{paragraph}</p>
+            ))}
             {discovery.figures?.filter((f) => f.sectionId === s.id).map((f) => (
-              <EvidenceFigure key={f.id} discoveryId={discovery.id} figure={f} revision={discovery.revision ?? discovery.updatedAt} />
+              <EvidenceFigure key={f.id} discoveryId={discovery.id} figure={f} revision={discovery.revision ?? discovery.updatedAt} expandable />
             ))}
             {s.equation && (
               <Suspense
@@ -263,7 +265,7 @@ export default function DiscoveryPage() {
             ? "Retrieving the research brief."
             : error
               ? "The research brief could not be loaded. Resolve the connection error above and try again."
-              : "No discovery has this stable ID."}
+              : "This investigation could not be found."}
         </p>
         <Link className="btn btn-primary" to="/">
           Back to discoveries
@@ -277,7 +279,6 @@ export default function DiscoveryPage() {
           <ArrowLeft size={16} />
           All discoveries
         </Link>
-        <span>{discovery.id}</span>
       </div>
       <header className="discovery-header">
         <div className="split-row">
@@ -296,9 +297,6 @@ export default function DiscoveryPage() {
         {discovery.question && <p className="discovery-question">{discovery.question}</p>}
         <p className="discovery-lead">{discovery.summary}</p>
         <div className="discovery-meta">
-          {discovery.illustrative && (
-            <span className="example-label">Illustrative example</span>
-          )}
           <span>Manuscript {discovery.version}</span>
           <span>Updated {formatDate(discovery.updatedAt)}</span>
           {user?.role === "Admin" && (
@@ -313,12 +311,6 @@ export default function DiscoveryPage() {
           )}
         </div>
       </header>
-      {discovery.illustrative && (
-        <div className="notice research-notice">
-          <strong>Illustrative example.</strong> The findings and review stages
-          are fictional.
-        </div>
-      )}
       {editing && (
         <DiscoveryEditor
           key={discovery.id}
@@ -339,9 +331,7 @@ export default function DiscoveryPage() {
             <span className="eyebrow">
               {discovery.status === "Awaiting Validation"
                 ? "Open for examination"
-                : discovery.illustrative
-                  ? "Illustrative review record"
-                  : "Review record"}
+                : "Review record"}
             </span>
             <p>{discovery.reviewNote}</p>
           </div>

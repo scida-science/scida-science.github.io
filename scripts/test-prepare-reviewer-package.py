@@ -51,6 +51,7 @@ class ReviewerPackageTests(unittest.TestCase):
     def test_complete_deterministic_archive_and_flat_download(self):
         before = {p.relative_to(self.source).as_posix(): p.read_bytes() for p in self.source.rglob('*') if p.is_file()}
         first = self.build()
+        self.assertIn('parts/', (self.repo / 'reviewer/.gitignore').read_text())
         self.assertGreater(len(first['files']), 5)
         second_repo = self.root / 'repository2'
         second_repo.mkdir()

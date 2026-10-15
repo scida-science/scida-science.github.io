@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 import { createApiClient } from "../src/lib/api";
 import { createPortalRepository } from "../src/services/repository";
-import { discoveries } from "../src/data/discoveries";
+import { discoveries } from "../test/fixtures/discoveries";
 import type { DiscussionComment, ProfileInput } from "../src/types";
 import { handleRequest } from "./index";
 import { digest } from "./crypto";
@@ -106,7 +106,7 @@ beforeEach(async () => {
       document: {
         schemaVersion: 1,
         visibility: "public",
-        discovery: structuredClone(discovery),
+        discovery: { ...structuredClone(discovery), illustrative: false },
         materials: {
           paper: null,
           appendix: null,

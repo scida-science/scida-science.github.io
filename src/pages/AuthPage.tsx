@@ -73,11 +73,10 @@ export default function AuthPage() {
         {!configured ? (
           <>
             <p>
-              Sign-in is unavailable until account services are connected. You
-              can still read the illustrative research briefs.
+              Sign-in is unavailable until account services are connected.
             </p>
             <Link className="btn btn-secondary" to="/">
-              Explore illustrative discoveries
+              Back to discoveries
             </Link>
           </>
         ) : (

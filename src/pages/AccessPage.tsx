@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { topics } from "../data/discoveries";
+import { topics } from "../data/topics";
 import { formatDate } from "../components/Ui";
 import { canReviewApplication, reviewTopics } from "../services/permissions";
 import { usePortal } from "../state/PortalContext";

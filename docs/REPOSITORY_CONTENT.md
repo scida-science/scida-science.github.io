@@ -60,7 +60,9 @@ research bundle.
 
 ## Approved reviewer packages
 
-The complete packages now live under `reviewer/` in each private investigation
+The complete packages are prepared locally under `reviewer/`. Numbered archive
+parts are uploaded as assets of a private draft release, rather than Git blobs.
+Small package manifests and reproduction helpers remain in the investigation
 repository. The existing `repository` material can use
 `{ "path": "reviewer/package.json", "access": "reviewer", "format": "multipart-zip" }`.
 Other materials and their access levels remain unchanged. This uses existing
@@ -68,7 +70,8 @@ topic-review approval; a code request alone grants no permission.
 
 The package manifest records `schemaVersion: 1`, the joined archive's `filename`,
 `size`, `sha256`, and `files`. Each file declares `id`, repository-relative `path`,
-`size`, and `sha256`. Files include the reviewer README, a standard-library Python
+`size`, and `sha256`. Release-backed files also declare a positive integer
+`releaseAssetId`, belonging to the same private investigation repository. Files include the reviewer README, a standard-library Python
 assembly helper, the archive index and ZIP parts of at most 48 MiB. Every path
 must remain inside the manifest's `reviewer/` directory. The content validator
 checks every declared file's size and hash without loading the whole archive.
@@ -76,6 +79,10 @@ checks every declared file's size and hash without loading the whole archive.
 The ordinary material endpoint returns an authorized file list. Its
 `/files/{fileId}` child endpoint rechecks the same material permission before
 streaming a declared file. IDs do not allow arbitrary repository-file access.
+For release assets, the Worker checks the asset name, size and available GitHub
+digest, then streams the asset without buffering it. It follows only a GitHub
+asset-CDN redirect, without forwarding the installation token. Neither that
+signed URL nor GitHub credentials are returned to the browser.
 The UI verifies bytes before saving, and the assembly helper verifies the joined
 archive and safe paths before extracting the original research tree. Full inputs
 and retained results stay behind reviewer access; they do not enter public brief

@@ -7,7 +7,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { HashRouter, MemoryRouter } from "react-router-dom";
 import App from "./App";
-import { discoveries } from "./data/discoveries";
+import { discoveries } from "../test/fixtures/discoveries";
 import type { Profile, ActionResult } from "./types";
 import type { usePortal } from "./state/PortalContext";
 
@@ -93,10 +93,15 @@ afterEach(() => {
 });
 
 describe("Public research and real account interface", () => {
-  it("renders repository questions, evidence alt text and captions on the card and detail page", async () => {
+  it("renders the headline evidence on the feed and all section figures on the investigation page", async () => {
     const d = portal.state.discoveries[0];
     d.question = "Does the signal survive the controls?";
-    d.figures = [{ id: "plot", path: "assets/plot.png", caption: "Measured points with conditional errors.", alt: "Measured points and uncertainty bars.", sectionId: d.sections[0].id }];
+    d.sections[0].body = "Context from the manuscript.\n\nLimitations from the manuscript.";
+    d.figures = [
+      { id: "plot", path: "assets/plot.png", caption: "Measured points with conditional errors.", alt: "Measured points and uncertainty bars.", sectionId: d.sections[0].id },
+      { id: "control", path: "assets/control.png", caption: "The retained control comparison.", alt: "Control comparison.", sectionId: d.sections[1].id },
+      { id: "check", path: "assets/check.png", caption: "The retained sensitivity comparison.", alt: "Sensitivity comparison.", sectionId: d.sections[2].id },
+    ];
     d.headlineFigureId = "plot";
     const create = vi.fn(() => "blob:local-evidence");
     const revoke = vi.fn();
@@ -105,11 +110,31 @@ describe("Public research and real account interface", () => {
     expect(screen.getByText(d.question)).toBeTruthy();
     expect(await screen.findByAltText(d.figures[0].alt)).toBeTruthy();
     expect(screen.getByText(d.figures[0].caption)).toBeTruthy();
+    expect(screen.queryByAltText(d.figures[1].alt)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Open full-size figure/ })).toBeNull();
     view.unmount();
     expect(revoke).toHaveBeenCalledWith("blob:local-evidence");
     openApp(`/discoveries/${d.id}`);
     expect(await screen.findByAltText(d.figures[0].alt)).toBeTruthy();
+    for (const figure of d.figures) {
+      expect(await screen.findByAltText(figure.alt)).toBeTruthy();
+      expect(screen.getByText(figure.caption)).toBeTruthy();
+    }
+    expect(screen.getAllByRole("link", { name: /Open full-size figure/ })).toHaveLength(3);
+    expect(screen.getByText("Context from the manuscript.").tagName).toBe("P");
+    expect(screen.getByText("Limitations from the manuscript.").tagName).toBe("P");
+    expect(screen.queryByText(d.id)).toBeNull();
+  });
+
+  it("keeps a failed figure honest and preserves its scientific caption", async () => {
+    const d = portal.state.discoveries[0];
+    d.figures = [{ id: "plot", path: "assets/plot.png", caption: "Caption retained from the manuscript.", alt: "Scientific evidence.", sectionId: d.sections[0].id }];
+    vi.mocked(portal.loadFigure).mockRejectedValue(new Error("Unavailable"));
+    openApp(`/discoveries/${d.id}`);
+    expect(await screen.findByText("Figure unavailable. The caption remains available below.")).toBeTruthy();
     expect(screen.getByText(d.figures[0].caption)).toBeTruthy();
+    expect(screen.queryByAltText(d.figures[0].alt)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Open full-size figure/ })).toBeNull();
   });
   it("browses without login or selectable identities and combines field, status, and keyboard filters", async () => {
     const interaction = userEvent.setup();
@@ -117,9 +142,9 @@ describe("Public research and real account interface", () => {
     expect(
       within(screen.getByRole("tabpanel")).getAllByRole("article"),
     ).toHaveLength(6);
-    expect(
-      within(screen.getByRole("tabpanel")).getAllByText(/Illustrative example/),
-    ).toHaveLength(6);
+    expect(within(screen.getByRole("tabpanel")).queryByText(/Illustrative example/)).toBeNull();
+    expect(screen.queryByText(/^AST-\d+$/)).toBeNull();
+    expect(screen.queryByText(/^AI-\d+$/)).toBeNull();
     expect(
       screen.queryByRole("combobox", { name: /persona|role/i }),
     ).toBeNull();
@@ -191,16 +216,16 @@ describe("Public research and real account interface", () => {
     expect(screen.getByRole("tab", { name: "For you" }).getAttribute("aria-selected")).toBe("true");
     const cards = () => within(screen.getByRole("tabpanel")).getAllByRole("article");
     expect(cards()).toHaveLength(6);
-    expect(cards()[0].textContent).toContain("AI-001");
+    expect(within(cards()[0]).getByRole("link").getAttribute("href")).toBe("/discoveries/AI-001");
     await interaction.click(screen.getByRole("tab", { name: "Recent discoveries" }));
-    expect(cards()[0].textContent).toContain("AST-001");
+    expect(within(cards()[0]).getByRole("link").getAttribute("href")).toBe("/discoveries/AST-001");
   });
 
   it("does not collect credentials or simulate login when account services are unconfigured", () => {
     portal.configured = false;
     openApp("/login");
     expect(
-      screen.getByText("Account services are not configured yet."),
+      screen.getByText("The research portal is not connected."),
     ).toBeTruthy();
     expect(screen.queryByLabelText("Email")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
@@ -209,6 +234,25 @@ describe("Public research and real account interface", () => {
       screen.queryByRole("button", { name: "Sign in with GitHub" }),
     ).toBeNull();
     expect(portal.signInWithGitHub).not.toHaveBeenCalled();
+  });
+
+  it("shows an honest empty feed and unavailable states without local research", () => {
+    portal.state.discoveries = [];
+    const empty = openApp();
+    expect(screen.getByText("No discoveries available yet")).toBeTruthy();
+    expect(screen.queryByRole("article")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
+    empty.unmount();
+    portal.configured = false;
+    const unconfigured = openApp();
+    expect(screen.getByRole("heading", { name: "Discoveries unavailable" })).toBeTruthy();
+    expect(screen.queryByRole("article")).toBeNull();
+    unconfigured.unmount();
+    portal.configured = true;
+    portal.error = "Research is temporarily unavailable.";
+    openApp();
+    expect(screen.getByRole("heading", { name: "Discoveries unavailable" })).toBeTruthy();
+    expect(screen.queryByRole("article")).toBeNull();
   });
 
   it("starts GitHub sign-in without collecting credentials and disables duplicate requests", async () => {
@@ -803,7 +847,7 @@ describe("Public research and real account interface", () => {
     );
   });
 
-  it("labels examples explicitly without describing real discoveries as fictional", () => {
+  it("shows validation records without internal IDs or fictional-research labels", () => {
     const discovery = portal.state.discoveries.find(
       (item) => item.id === "AI-003",
     )!;

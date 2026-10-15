@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { usePortal } from "../state/PortalContext";
-import { topics } from "../data/discoveries";
+import { topics } from "../data/topics";
 import { stages } from "./Ui";
 import type { Discovery, Stage, TopicId } from "../types";
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { webcrypto, createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { discoveries } from "../data/discoveries";
+import { discoveries } from "../../test/fixtures/discoveries";
 import {
   ApiError,
   createApiClient,
@@ -60,7 +60,7 @@ function setup(options: { role?: Profile["role"]; signedIn?: boolean } = {}) {
       return json({
         state: {
           ...emptyPortalState(),
-          discoveries,
+          discoveries: discoveries.map((discovery) => ({ ...discovery, illustrative: false })),
           profiles: authenticated ? [currentProfile] : [],
         },
         user: authenticated ? currentProfile : null,
@@ -126,13 +126,13 @@ describe("API configuration and sessions", () => {
       expect(parseApiConfiguration(url).url).toBeNull();
     expect(parseApiConfiguration()).toEqual({ url: null, error: null });
   });
-  it("ignores all old demo state and offers read-only examples when unconfigured", async () => {
+  it("ignores old demo state and stays empty when unconfigured", async () => {
     localStorage.setItem(
       "scida.demo.v1",
       JSON.stringify({ role: "Admin", activeUserId: "admin" }),
     );
     const service = createPortalService(null);
-    expect(service.getSnapshot().state.discoveries).toHaveLength(6);
+    expect(service.getSnapshot().state).toEqual(emptyPortalState());
     expect(service.getSnapshot().state.comments).toEqual([]);
     expect(service.getSnapshot().user).toBeNull();
     expect((await service.actions.signInWithGitHub()).ok).toBe(false);
@@ -572,6 +572,19 @@ describe("shared writes and authorized materials", () => {
     expect(service.getSnapshot().error).toBe(
       "Private content store unavailable",
     );
+  });
+  it("does not display legacy illustrative research returned by a connected backend", async () => {
+    const { service, routes } = setup({ signedIn: false });
+    const realRecord = { ...discoveries[0], id: "real-repository-record", illustrative: false };
+    routes.set("/v1/portal", () => json({
+      state: { ...emptyPortalState(), discoveries: [...discoveries, realRecord] }, user: null,
+    }));
+    await service.start();
+    expect(service.getSnapshot().state.discoveries).toEqual([realRecord]);
+    routes.set("/v1/portal", () => json({ error: "Research is unavailable" }, 503));
+    await service.actions.refresh();
+    expect(service.getSnapshot().state).toEqual(emptyPortalState());
+    expect(service.getSnapshot().error).toBe("Research is unavailable");
   });
   it("never treats rejected writes as success or adds local records", async () => {
     const { service, routes } = setup();

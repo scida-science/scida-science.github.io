@@ -5,7 +5,8 @@ import { createHash, generateKeyPairSync, verify } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { discoveries } from '../src/data/discoveries.ts';
+import { discoveries as illustrativeFixtures } from '../test/fixtures/discoveries.ts';
+const discoveries = illustrativeFixtures.map((item) => ({ ...item, illustrative: false }));
 
 const scriptPath = fileURLToPath(new URL('../.worker-dist/index.js', import.meta.url));
 await readFile(scriptPath); // Run npm run build:backend before this check.

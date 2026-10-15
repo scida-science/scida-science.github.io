@@ -81,6 +81,8 @@ export interface ReviewerPackageFile {
   path: string;
   size: number;
   sha256: string;
+  /** Private release asset in this investigation repository; never a client URL. */
+  releaseAssetId?: number;
 }
 export interface ReviewerPackage {
   schemaVersion: 1;
@@ -182,11 +184,12 @@ export function validReviewerPackage(value: unknown, manifestPath: string): valu
       value.files.length < 1 || value.files.length > 512) return false;
   const ids = new Set<string>(), paths = new Set<string>(), names = new Set<string>();
   for (const file of value.files) {
-    if (!object(file) || !keys(file, ["id", "path", "size", "sha256"]) ||
+    if (!object(file) || !keys(file, ["id", "path", "size", "sha256", "releaseAssetId"]) ||
         typeof file.id !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(file.id) ||
         typeof file.path !== "string" || !validMaterial({ path: file.path, access: "reviewer" }) ||
         !file.path.startsWith(directory) || file.path === manifestPath ||
-        !size(file.size) || (file.size as number) > 100 * 1024 * 1024 || !digest(file.sha256)) return false;
+        !size(file.size) || (file.size as number) > 100 * 1024 * 1024 || !digest(file.sha256) ||
+        (file.releaseAssetId !== undefined && !size(file.releaseAssetId))) return false;
     const name = file.path.split("/").at(-1)!;
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(name) || ids.has(file.id) || paths.has(file.path) || names.has(name)) return false;
     ids.add(file.id); paths.add(file.path); names.add(name);

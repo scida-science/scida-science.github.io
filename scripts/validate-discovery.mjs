@@ -15,8 +15,9 @@ const validateSchema = ajv.compile(schema);
 // Reuse the deployed semantic checks as well as the published JSON Schema.
 const bundled = await build({ stdin: { contents: 'export { validDiscoveryDocument } from "./backend/domain"; export { validReviewerPackage } from "./backend/model";', resolveDir: root }, bundle: true, platform: "node", format: "esm", write: false });
 const { validDiscoveryDocument, validReviewerPackage } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
-const targets = process.argv.slice(2);
-if (!targets.length) throw new Error("Usage: node scripts/validate-discovery.mjs <repository> [...repositories]");
+const requireReleaseAssets = process.argv.includes("--require-release-assets");
+const targets = process.argv.slice(2).filter((arg) => arg !== "--require-release-assets");
+if (!targets.length) throw new Error("Usage: node scripts/validate-discovery.mjs [--require-release-assets] <repository> [...repositories]");
 const ids = new Set();
 for (const target of targets) {
   const repo = await realpath(resolve(target));
@@ -55,6 +56,8 @@ for (const target of targets) {
         const manifest = JSON.parse(await checkedFile(material.path));
         if (!validReviewerPackage(manifest, material.path)) throw new Error("Invalid reviewer package manifest");
         for (const file of manifest.files) {
+          if (requireReleaseAssets && /^part\d{3,}$/.test(file.id) && !file.releaseAssetId)
+            throw new Error(`Archive part has not been staged as a private release asset: ${file.id}`);
           const path = await checkedPath(file.path, true);
           if ((await stat(path)).size !== file.size) throw new Error(`Package size mismatch: ${file.path}`);
           const hash = createHash("sha256");

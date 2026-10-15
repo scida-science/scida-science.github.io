@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { discoveries } from "../src/data/discoveries";
+import { discoveries } from "../test/fixtures/discoveries";
 import { handleRequest } from "./index";
 import { digest } from "./crypto";
 import { GitHubApi, GitHubRepositoryStore } from "./github";
@@ -40,6 +40,8 @@ describe("reviewer package metadata", () => {
     ["invalid ID", (m: ReviewerPackage) => { m.files[0].id = "../private"; }],
     ["unsafe archive name", (m: ReviewerPackage) => { m.filename = "../Analysis.zip"; }],
     ["extra URL", (m: ReviewerPackage) => { Object.assign(m.files[0], { url: "https://example.test/private" }); }],
+    ["invalid release asset", (m: ReviewerPackage) => { m.files[1].releaseAssetId = -1; }],
+    ["unsafe release asset precision", (m: ReviewerPackage) => { m.files[1].releaseAssetId = Number.MAX_SAFE_INTEGER + 1; }],
   ])("rejects %s", (_label, mutate) => {
     const value = manifest(); mutate(value);
     expect(validReviewerPackage(value, "reviewer/package.json")).toBe(false);
@@ -133,5 +135,68 @@ describe("authenticated reviewer package routes", () => {
     expect(await response.text()).toBe("guide");
     const nested = await handleRequest(request("reviewer", "/files/readme"), env, store);
     expect(nested.status).toBe(404);
+  });
+
+  function releaseTransport(location = "https://release-assets.githubusercontent.com/asset?signature=private") {
+    const value = manifest(); value.files[1].releaseAssetId = 123;
+    fetcher.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/reviewer/package.json")) return Response.json(value);
+      if (url.pathname.endsWith("/releases/assets/123")) {
+        if (new Headers(init?.headers).get("Accept") === "application/octet-stream")
+          return new Response(null, { status: 302, headers: { Location: location } });
+        return Response.json({ id: 123, name: "Analysis.zip.001", size: 3, state: "uploaded", digest: "sha256:" + "a".repeat(64) });
+      }
+      if (url.hostname === "release-assets.githubusercontent.com")
+        return new Response("zip", { headers: { "Content-Length": "3" } });
+      throw new Error("Unexpected download destination");
+    });
+    return value;
+  }
+  it("streams a private release asset without disclosing or forwarding credentials", async () => {
+    releaseTransport();
+    const response = await handleRequest(request("reviewer", "/files/part001"), env, store);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("zip");
+    const [, init] = fetcher.mock.calls.at(-1)!;
+    expect(new Headers(init?.headers).has("Authorization")).toBe(false);
+    expect(init?.redirect).toBe("manual");
+    expect(response.headers.has("Location")).toBe(false);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const metadata = await handleRequest(request("reviewer"), env, store);
+    const body = await metadata.text();
+    expect(body).not.toContain("releaseAssetId");
+    expect(body).not.toContain("signature");
+    expect(body).not.toContain("private-installation-token");
+  });
+  it.each(["https://evil.test/archive", "http://release-assets.githubusercontent.com/asset", "https://user:pass@release-assets.githubusercontent.com/asset", "https://release-assets.githubusercontent.com:8443/asset", "https://release-assets.githubusercontent.com.evil.test/asset"])("rejects unsafe asset redirect %s", async (location) => {
+    releaseTransport(location);
+    const response = await handleRequest(request("reviewer", "/files/part001"), env, store);
+    expect(response.status).toBe(503);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it("denies a release asset before reading its metadata when review permission is revoked", async () => {
+    releaseTransport();
+    state.access[identities.reviewer].approvedTopics = [];
+    const response = await handleRequest(request("reviewer", "/files/part001"), env, store);
+    expect(response.status).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("rejects mismatched release metadata before retrieving binary data", async () => {
+    const value = releaseTransport(); value.files[1].sha256 = "c".repeat(64);
+    const response = await handleRequest(request("reviewer", "/files/part001"), env, store);
+    expect(response.status).toBe(503);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("does not follow a second CDN redirect", async () => {
+    releaseTransport();
+    const implementation = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) =>
+      new URL(String(input)).hostname === "release-assets.githubusercontent.com"
+        ? new Response(null, { status: 302, headers: { Location: "https://evil.test/next" } })
+        : implementation(input, init));
+    const response = await handleRequest(request("reviewer", "/files/part001"), env, store);
+    expect(response.status).toBe(503);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 });

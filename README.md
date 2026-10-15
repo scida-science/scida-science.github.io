@@ -2,7 +2,7 @@
 
 SciDA presents investigations developed with AI scientific research systems and supports review by research topic. The React, TypeScript and Vite frontend runs on GitHub Pages. A Cloudflare Worker handles GitHub sign-in, authorization and private GitHub storage. This implementation uses no external database, KV or D1 service.
 
-This branch adds repository-backed questions and evidence figures. The three prepared astronomy investigations are **Awaiting Validation**. Their local content commits and this documentation have not been pushed or published. The six bundled frontend fallback examples remain illustrative, including their status labels.
+This branch integrates three real astronomy investigations, all **Awaiting Validation**, with evidence figures, public papers and protected complete analysis packages. Historical examples are isolated in test fixtures. The production frontend has no example fallback, and the backend excludes illustrative records. Publication is deliberately deferred: pushing these preparation branches does not update the live website or Worker.
 
 Earlier deployment documentation records a connected production site and successful owner/Reader sign-in on 14 October 2026. Those are historical checks, not a fresh verification of deployed connectivity or successful reviewer posting. The new figure support and real astronomy content still require a coordinated release. See [verification and remaining work](#verification-and-remaining-work).
 
@@ -14,7 +14,8 @@ Earlier deployment documentation records a connected production site and success
 | [src/pages/HomePage.tsx](src/pages/HomePage.tsx) | Scrolling discovery feed and detail-page links |
 | [src/pages/DiscoveryPage.tsx](src/pages/DiscoveryPage.tsx) | Research sections, figures, downloads, code requests and discussion |
 | [src/components/EvidenceFigure.tsx](src/components/EvidenceFigure.tsx) | Authenticated PNG loading, captions and alt text |
-| [src/data/discoveries.ts](src/data/discoveries.ts) | Six illustrative fallback briefs; not the connected site's scientific source |
+| [src/data/topics.ts](src/data/topics.ts) | Research-field and topic taxonomy |
+| [test/fixtures/discoveries.ts](test/fixtures/discoveries.ts) | Historical synthetic test records, excluded from production builds and provisioning |
 | [backend/](backend/) | Worker routes, GitHub storage, permissions and OAuth |
 | [docs/discovery.schema.json](docs/discovery.schema.json) | Discovery-document schema, version 1 |
 | [docs/REPOSITORY_CONTENT.md](docs/REPOSITORY_CONTENT.md) | Evidence fields, provenance conventions and release boundary |
@@ -27,7 +28,7 @@ Private manuscripts, scientific inputs, internal records and correspondence do n
 
 ## Local setup and preview
 
-Use **Node.js 24** and npm, matching CI. The documentation audit used Node 24.15.0 and npm 11.12.1 on Windows. The lockfile fixes dependencies. Installation needs package-registry access; local examples and fixture tests need no GitHub or Cloudflare credentials once dependencies are installed.
+Use **Node.js 24** and npm, matching CI. The documentation audit used Node 24.15.0 and npm 11.12.1 on Windows. The lockfile fixes dependencies. Installation needs package-registry access; fixture tests need no GitHub or Cloudflare credentials once dependencies are installed.
 
 From this repository's root in PowerShell:
 
@@ -41,7 +42,7 @@ npm.cmd run dev
 
 Use `npm` instead of `npm.cmd` on other platforms. Open Vite's printed address, normally `http://127.0.0.1:5173/`. Stop it with `Ctrl+C`. The copy command preserves existing configuration; choose the intended mode in your own `.env.local`:
 
-- **UI-only examples:** leave `VITE_SCIDA_API_URL` blank. Six read-only illustrative briefs appear; account services and code requests are unavailable.
+- **Unconfigured preview:** leave `VITE_SCIDA_API_URL` blank. An honest unavailable/empty state appears; no discoveries, accounts or successful submissions are invented.
 - **Connected frontend:** set that variable to the intended Worker origin and restart Vite. This reads that Worker's actual repositories. Placing private checkouts beside this project does not automatically load them into Vite.
 - **Build preview:** use the commands below. Preview serves `dist/`, normally at `http://127.0.0.1:4173/`; it does not start a Worker. API configuration is fixed at build time, so rebuild after changing it.
 
@@ -64,28 +65,29 @@ Only `VITE_SCIDA_API_URL` is allowed as frontend configuration. It must be an HT
 | `npm.cmd run build` | TypeScript checks and production frontend assets in `dist/` |
 | `node scripts/validate-discovery.mjs <content-repository>` | Schema, semantic links, asset/material paths, hashes and private claim-pointer consistency for a prepared package |
 | `python scripts/test-prepare-reviewer-package.py` | Small synthetic packing, integrity and extraction tests; no research analysis |
+| `$env:SCIDA_DISCOVERY_ROOT='../SciDA-discoveries'; npm.cmd test` | Adds three opt-in UI integration checks using private local discovery files; no research is copied into the public source |
 
 For the current sibling-checkout arrangement:
 
 ```powershell
-node scripts/validate-discovery.mjs ../SciDA-discoveries/discovery-ast-001 ../SciDA-discoveries/discovery-ast-002 ../SciDA-discoveries/discovery-ast-003
+node scripts/validate-discovery.mjs ../SciDA-discoveries/GRB180411A_Dust_Echo ../SciDA-discoveries/TOI475_Ephemeris_Discrepancy ../SciDA-discoveries/TIC233166139_APOGEE_Mass_Ratio
 ```
 
-Replace the directory arguments if your checkouts are elsewhere. Success prints one line per investigation with figure and traced-claim counts. These local checks need no credentials; access to the private checkouts must already have been granted separately.
+Replace the directory arguments if your checkouts are elsewhere. Success prints one line per investigation with figure and traced-claim counts. These local checks need no credentials; access to the private checkouts and ignored archive parts must already have been granted separately. Add `--require-release-assets` before the directories to require uploaded asset IDs for every part. A fresh Git clone contains the small manifests, papers and figures; the large parts must be obtained separately through authorized package access before checking their local hashes.
 
 The content validator currently requires the prepared packages' internal provenance format, non-illustrative records and `status: "Awaiting Validation"`. It is not a general validator for old examples or a future Published release. Update its policy deliberately when the release process changes; do not change a scientific status just to satisfy a test. Passing software checks does not establish scientific validity or novelty.
 
 ## How repositories supply the site
 
-The Worker imports active, private `discovery-*` repositories in the configured organization that the GitHub App can access. It reads each root `discovery.json` from the repository's **default branch**, in batches of three. It uses `scida-admin` separately for accounts and workflow records. A malformed configuration or duplicate discovery ID can fail the feed; validate before releasing a record.
+The Worker imports active, private repositories with the GitHub repository topic `scida-discovery` (legacy `discovery-*` names are also recognized) in the configured organization that the GitHub App can access. It reads each root `discovery.json` from the repository's **default branch**, in batches of three. It uses `scida-admin` separately for accounts and workflow records. A malformed configuration or duplicate discovery ID can fail the feed; validate before releasing a record.
 
 | Prepared repository | Stable ID | Investigation |
 | --- | --- | --- |
-| `discovery-ast-001` | `AST-001` | GRB 180411A dust-echo candidate |
-| `discovery-ast-002` | `AST-002` | TOI-475 ephemeris discrepancy |
-| `discovery-ast-003` | `AST-003` | TIC 233166139 stellar-binary mass ratio |
+| `GRB180411A_Dust_Echo` | `AST-001` | GRB 180411A dust-echo candidate |
+| `TOI475_Ephemeris_Discrepancy` | `AST-002` | TOI-475 ephemeris discrepancy |
+| `TIC233166139_APOGEE_Mass_Ratio` | `AST-003` | TIC 233166139 stellar-binary mass ratio |
 
-Repository names identify storage; `discovery.id` identifies the website page, such as `/#/discoveries/AST-002`. The existing `discovery-ai-*` records and unconfigured examples are separate from these prepared astronomy briefs.
+Repository names identify storage; `discovery.id` identifies the website page, such as `/#/discoveries/AST-002`. Only records with `illustrative: false` enter the feed. Legacy placeholder repositories remain preserved but excluded. Stable IDs retain page, request and discussion references; they are not displayed as scientific titles.
 
 Each document has four top-level fields:
 
@@ -119,7 +121,7 @@ Public visibility exposes the brief, selected images and rendered discussion thr
 | `reviewer` | Review access for its topic, including current Senior Approver scope or the owner |
 | `admin` | Configured owner identity |
 
-The prepared astronomy records configure public briefs/selected images for a future release, with sign-in required for papers and selected supporting downloads. Their **Analysis code** material uses the existing `reviewer` access level for the investigation's topic and points to the complete reviewer package. Direct GitHub access is not required. Local preparation does not make these arrangements live.
+The prepared astronomy records configure public briefs/selected images for a future release, with public paper PDFs and sign-in required only for selected supporting downloads. Their **Analysis code** material uses the existing `reviewer` access level for the investigation's topic and points to the complete reviewer package. Direct GitHub access is not required. Local preparation does not make these arrangements live.
 
 GitHub handles identity, passwords and recovery. A researcher's GitHub token establishes identity and verified primary email, then is discarded; repository operations use an App installation token. The browser holds only a revocable SciDA session in `sessionStorage`, for up to eight hours. OAuth uses PKCE, state, a first-party HttpOnly cookie and a single-use exchange code. Logout revokes the session; expiry or HTTP 401 clears the local identity. Configured API failures remain visible and never fabricate accounts or successful actions.
 
@@ -137,26 +139,28 @@ Keep organization repository base permissions at None and avoid direct collabora
 
 ## Complete reviewer packages
 
-The three investigation checkouts contain `reviewer/package.json`, `README.md`, `assemble.py`, `archive.json` and numbered ZIP parts under `reviewer/parts/`. `package.json` records the archive identity and each served file's ID, relative path, byte count and SHA-256. `archive.json` supplies the ordered parts for offline assembly. The original research tree stays intact inside the archive, alongside a concise reviewer guide; original source manifests and scientific bytes are preserved.
+The three investigation checkouts contain `reviewer/package.json`, `README.md`, `assemble.py`, `archive.json` and numbered ZIP parts under `reviewer/parts/`. The parts are ignored by Git and staged as assets of a private draft release; they must not enter Git history. `package.json` records the archive identity and each served file's ID, relative path, byte count and SHA-256, plus `releaseAssetId` for uploaded parts. `archive.json` supplies the ordered parts for offline assembly. The original research tree stays intact inside the archive, alongside a concise reviewer guide; original source manifests and scientific bytes are preserved.
 
 The **Analysis code** panel lets an approved reviewer save the complete package to a chosen folder in browsers supporting directory access, or download individual files. Save all files together with their original names, then run `python assemble.py` with Python 3.12. The helper verifies all parts and the complete archive, rejects unsafe ZIP paths, and extracts into a fresh directory without an additional joined-ZIP copy. `python assemble.py --verify-only` checks the download without extraction. Existing destination directories are not overwritten. Directory downloads stop on an error; a retry verifies existing files and refuses to overwrite different content.
 
 To prepare a replacement from a complete, manifest-backed research bundle, run this from the website checkout. Supply your own paths; the tool requires an unused `reviewer/` destination and does not edit the scientific source:
 
 ```powershell
-python scripts/prepare-reviewer-package.py --source "../research/GRB180411A_Dust_Echo" --repository "../SciDA-discoveries/discovery-ast-001" --name GRB180411A_Dust_Echo-reviewer
-node scripts/validate-discovery.mjs ../SciDA-discoveries/discovery-ast-001
+python scripts/prepare-reviewer-package.py --source "../research/GRB180411A_Dust_Echo" --repository "../SciDA-discoveries/GRB180411A_Dust_Echo" --name GRB180411A_Dust_Echo-reviewer
+node scripts/validate-discovery.mjs ../SciDA-discoveries/GRB180411A_Dust_Echo
 ```
 
-The Python 3.12 tool needs no extra packages. It verifies the source release inventory, creates deterministic ZIP64 parts of at most 48 MiB, then compares every archived file with the original. It includes all release-manifest inputs, scripts, configurations, locks, manuscript files and retained results. Only unindexed runtime caches are excluded. Individual parts fit the existing [GitHub Contents raw-file interface](https://docs.github.com/en/rest/repos/contents#get-repository-content); no new storage service or Git LFS is used. Preserve `reviewer/** -text` in each content repository so Git cannot change checksummed bytes.
+The Python 3.12 tool needs no extra packages. It verifies the source release inventory, creates deterministic ZIP64 parts of at most 48 MiB, then compares every archived file with the original. It includes all release-manifest inputs, scripts, configurations, locks, manuscript files and retained results. Only unindexed runtime caches are excluded. It adds `reviewer/.gitignore` to keep parts out of Git. Preserve `reviewer/** -text` so Git cannot change checksummed helper bytes. No Git LFS or paid storage is used.
 
 Map the result as `materials.repository: { "path": "reviewer/package.json", "access": "reviewer", "format": "multipart-zip" }`. Keep other material policies unchanged. Packages belong only in the private investigation repositories. Release matching frontend/backend support before the metadata; this preparation does not push or publish any files. Large repository uploads and production downloads still require a later deployment check. Scientific reproduction requirements and limitations, including TOI-475's unverified complete combined replay, are in each reviewer README.
 
-Package parts are committed in batches below 1 GiB, followed by the package index, reviewer guide and material mapping. Preserve that sequence. For a later authorized release, upload successive batch commits to the content branch before its final commit, then review the default-branch merge separately. A single push of the whole GRB or TOI branch can exceed [GitHub's 2 GiB push limit](https://docs.github.com/en/get-started/using-git/troubleshooting-the-2-gb-push-limit); splitting files alone does not remove that limit. Do not squash the data into one oversized commit or rewrite the existing history.
+Run `node scripts/upload-reviewer-assets.mjs --directory <local-investigation> --repo scida-science/<repository> --tag reviewer-package-20261015 --target <existing-40-character-commit>` to verify every local package file. With `--upload`, supply a GitHub credential through stdin only; the helper creates or resumes a private draft release, verifies remote asset names, sizes and SHA-256 digests, uploads missing parts and then records their IDs in `reviewer/package.json`. It refuses differing collisions and never overwrites an existing asset. Commit only the small manifests/helpers and scientific presentation files, then push a non-deploying branch. Draft assets do not publish the site. Keep preserved pre-migration branches local if their history contains archive blobs.
+
+[GitHub releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas) permit up to 1,000 assets per release, each under 2 GiB, with no total release-size or bandwidth quota. The unchanged 48 MiB parts fit those limits. The existing GitHub App can read private assets with Contents permission. The Worker checks the current topic permission for every file, validates the remote asset identity, and follows only an allowed GitHub asset-CDN redirect without forwarding credentials. The browser receives an attachment stream, never a signed GitHub URL. [Workers Free limits](https://developers.cloudflare.com/workers/platform/limits/) include 128 MB memory, 10 ms CPU, 50 external subrequests per request and 100,000 requests/day; response bodies have no enforced size limit. Streaming keeps archive bytes out of Worker memory and hashing stays in the browser. Actual authenticated production downloads remain a publication check.
 
 ## Add or update an investigation
 
-1. Use a dedicated branch in the appropriate private content repository. A new investigation needs a private, active `discovery-*` repository with Issues enabled and a unique stable ID. Repository creation and release are separate owner actions.
+1. Use a dedicated branch in the appropriate private content repository. A new investigation needs a private, active repository with a descriptive scientific name, the `scida-discovery` repository topic, Issues enabled, and a unique stable ID. Repository creation and release are separate owner actions.
 2. Read the current manuscript and results. Update the question, summary, context, methods, uncertainty, limitations, contributions and availability together. Computational checks do not establish human approval, physical confirmation or novelty.
 3. Add selected PNGs with traceable captions/alt text. Keep headline and section IDs consistent. Reference an existing paper path where practical; update its material mapping if it moves. Distinguish the compact website selection from the full executable research bundle.
 4. Maintain private claim/provenance inventories against actual source and asset bytes. They support validation and maintenance, not public rendering. Check that public fields/downloads contain no internal notes or correspondence.
@@ -164,7 +168,7 @@ Package parts are committed in batches below 1 GiB, followed by the package inde
 6. Validate content and paths. The owner editor handles research text/status while preserving repository-managed visibility, material policies and figure paths. Manage these and figure captions directly in the private repository.
 7. Commit for review. A content branch is not a live preview source. Following a separately authorized release, default-branch content appears on refresh without a frontend rebuild. Matching schema/backend/rendering changes must be released first.
 
-The recorded App installation uses All repositories; selected-repository installations instead need each new repository explicitly added. App permissions are broader than SciDA's private-discovery import filter. The [provisioning helper](scripts/provision-repositories.ps1) creates missing repositories/files and preserves existing records; it does not synchronize scientific content. Editing `src/data/discoveries.ts` does not overwrite private discoveries.
+The recorded App installation uses All repositories; selected-repository installations instead need each new repository explicitly added. App permissions are broader than SciDA's private-discovery import filter. The [provisioning helper](scripts/provision-repositories.ps1) initializes only missing empty administrative storage and preserves existing records; it neither creates example discoveries nor synchronizes scientific content. Test fixtures never supply production data.
 
 ## Configuration and local Worker development
 
@@ -194,22 +198,26 @@ Set the frontend's ignored `.env.local` to `VITE_SCIDA_API_URL=http://127.0.0.1:
 
 No deployment commands were executed during this update. Keep the hosting policy at **Workers Free with $0 recurring cost**; do not enable paid plans or chargeable overages as part of setup.
 
+The website preparation uses `content/astronomy-investigations-20261015`. The three private investigations use `content/astronomy-release-20261015`, preserving the scientific commits and remote ancestry while excluding archive-blob commits. The original complete preparation branches remain local under `content/astronomy-investigations-20261015`; do not push those archive-containing branches. Repository renames preserve their GitHub identities, permissions and history. Default branches remain unchanged, so this staging work does not release the real briefs.
+
 1. Confirm private storage, organization access and App installation. Required App permissions are repository Contents/Issues read-write, Metadata read-only and account email read-only. Use the exact API `/auth/callback`; disable wildcard callbacks and authorization during installation. See [deployment instructions](docs/DEPLOYMENT.md).
 2. Set identifiers and four Worker secrets using the approved local Wrangler/Cloudflare procedure. Secret operations can deploy a Worker version; they are not read-only verification. Keep keys, values and encrypted backups outside public Git history.
 3. Run the checks above. When authorized, deploy the Worker separately with `npm.cmd run deploy:backend`. `build:backend` is a dry run. `/health` reporting `configured: true` checks configuration presence, not connectivity or working OAuth.
 4. Use `node scripts/verify-live.mjs --require-configured` for read-only-effect smoke checks. It defaults to the production API and accepts `SCIDA_API_URL` as an HTTPS override. Its frontend origin is fixed in the script, so it is not a general local/staging checker. Negative authorization probes must not mutate records. Verify real authenticated/material workflows separately.
-5. Set Pages source to GitHub Actions and configure its `VITE_SCIDA_API_URL` repository variable. The [workflow](.github/workflows/deploy.yml) tests/packages the Worker and builds the frontend; it deploys Pages only from `main`. Its API smoke check runs when the API variable is configured; a blank variable can still deploy the illustrative fallback. The workflow does not deploy the Worker or receive Worker secrets.
+5. Set Pages source to GitHub Actions and configure its `VITE_SCIDA_API_URL` repository variable. The [workflow](.github/workflows/deploy.yml) tests/packages the Worker and builds the frontend; it deploys Pages only from `main`. Pushes to `content/**` run checks only: Pages configuration, artifact upload and deployment require `main`. Its live API smoke check runs only for a configured `main` build; a blank variable yields an honest unavailable state. The workflow does not deploy the Worker or receive Worker secrets.
 6. Release matching Worker/frontend support before merging metadata that uses the new figure fields. Merging a public discovery document to its default branch can expose it on the next read. Content changes need no Pages rebuild; frontend or build-time API configuration changes do.
 
 The organization homepage uses Vite base `/` and `HashRouter`. Detail-page refreshes need no server rewrites. Moving to a project-hosted site requires updating the Vite base and frontend/authentication destinations together.
 
 ## Verification and remaining work
 
-The reviewer-package update on **15 October 2026** passed a production build, backend type checks, **298 automated tests**, a fresh Worker dry-run build and the packaged workerd fixture check. Package-specific tests cover authorization before any file read, wrong-topic/Reader denial, revocation between files, unsafe manifests, download checksums and UI handling. These establish specified software behavior, not astronomical validity.
+The integration on **15 October 2026** passed a production build, backend type checks, **316 automated tests including the three opt-in private-content UI checks**, a fresh Worker dry-run build and the packaged workerd fixture check. Package-specific tests cover authorization before any file read, wrong-topic/Reader denial, revocation between files, unsafe manifests, protected release-asset redirects, download checksums and UI handling. These establish specified software behavior, not astronomical validity.
 
-The documentation and packaging checks cover relative links, source inventories, relocated entry-point help/plans, required-file closure, archive file identities and the downloaded assembly helper. Nine synthetic packaging tests passed; one filesystem-symlink creation test was skipped because Windows denied that capability. ZIP symlink and traversal tests passed. No scientific analyses, environment installations, deployments or secret inspections were performed in this update.
+All three complete archives passed every part/aggregate SHA-256, ZIP member CRC, safe-path and source-inventory checks. The full paper and exact reviewer guide are present in each. Nine synthetic packaging tests passed; one filesystem-symlink creation test was skipped because Windows denied that capability. ZIP symlink and traversal tests passed. No scientific analyses, fresh environment installations or deployments were performed.
 
-The deployment guide retains dated reports of owner/Reader sign-in, profile persistence and rejected unauthorized actions. Live reviewer approval and discussion tests were deferred until real discoveries were available and remain unfinished here. Current production connectivity, authenticated local OAuth and production package downloads were not exercised in this local preparation.
+An actual GitHub App download of all nine stellar-binary release assets transferred **428,025,018 bytes in 42.495 seconds**, with matching part/archive hashes and complete extraction of 6,955 scientific-package files plus the reviewer guide. The three small helpers, public PDF and three PNGs were also fetched through the backend from the pushed preparation branch and matched local hashes. Anonymous, Reader and wrong-topic package requests were denied before any GitHub call. This exercised real GitHub transport with isolated local authentication fixtures under Node; it did **not** test a real reviewer's browser session or the deployed Workers Free runtime. No production account records were changed.
+
+Publication still requires an authorized coordinated frontend/Worker release and content-branch merges, followed by desktop/mobile inspection, actual signed-in package downloads on Workers Free, reviewer approval/discussion checks, and real-world performance checks. Fresh-machine dependency installation and TOI-475's complete combined scientific replay remain unverified; the latter was deliberately not run. The deployment guide retains older owner/Reader sign-in and persistence results without treating them as verification of this release.
 
 Other operational limitations:
 

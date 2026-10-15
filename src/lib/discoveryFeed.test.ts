@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoveries } from "../data/discoveries";
+import { discoveries } from "../../test/fixtures/discoveries";
 import { hasResearchInterests, orderDiscoveries } from "./discoveryFeed";
 
 describe("discovery feed ordering", () => {

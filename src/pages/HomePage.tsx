@@ -13,7 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
-import { topics } from "../data/discoveries";
+import { topics } from "../data/topics";
 import { hasResearchInterests, orderDiscoveries } from "../lib/discoveryFeed";
 import { StatusBadge, formatDate, stages } from "../components/Ui";
 import type { Field, Stage } from "../types";
@@ -24,7 +24,7 @@ const tabId = (tab: FeedTab) =>
   `research-tab-${tab.toLowerCase().replaceAll(" ", "-")}`;
 
 export default function HomePage() {
-  const { state, user, loading, error } = usePortal();
+  const { state, user, configured, loading, error } = usePortal();
   const [selectedTab, setSelectedTab] = useState<FeedTab | null>(null);
   const [stage, setStage] = useState<Stage | "All stages">("All stages");
   const [query, setQuery] = useState("");
@@ -48,14 +48,16 @@ export default function HomePage() {
     ),
     field === "For you" ? user : null,
   );
-  if (state.discoveries.length === 0 && (loading || error))
+  if (state.discoveries.length === 0 && (!configured || loading || error))
     return (
       <section className="empty-state">
         <h1>{loading ? "Loading discoveries…" : "Discoveries unavailable"}</h1>
         <p>
           {loading
             ? "Retrieving the latest research briefs."
-            : "The discovery list could not be loaded. Resolve the connection error above and try again."}
+            : !configured
+              ? "The research portal is not connected yet."
+              : "The discovery list could not be loaded. Please try again."}
         </p>
       </section>
     );
@@ -82,7 +84,7 @@ export default function HomePage() {
             <span> / discoveries</span>
           </span>
           <div className="hero-note-rule" />
-          <span>{researchFields.join(" · ")}</span>
+          <span>{[...new Set(state.discoveries.map((discovery) => discovery.field))].join(" · ")}</span>
         </div>
       </section>
       <div className="home-layout">
@@ -209,12 +211,8 @@ export default function HomePage() {
                         {d.status === "Awaiting Validation"
                           ? "Review focus"
                           : d.status === "Published"
-                            ? d.illustrative
-                              ? "Illustrative publication record"
-                              : "Publication record"
-                            : d.illustrative
-                              ? "Illustrative validation record"
-                              : "Validation record"}
+                            ? "Publication record"
+                            : "Validation record"}
                       </strong>{" "}
                       {d.reviewNote.replace(
                         /^(Review focus|(?:Illustrative )?validation record|(?:Illustrative )?publication record):\s*/i,
@@ -223,14 +221,7 @@ export default function HomePage() {
                     </p>
                   </div>
                   <div className="card-bottomline">
-                    <span className="example-label">
-                      {d.illustrative && (
-                        <>
-                          Illustrative example <span>·</span>{" "}
-                        </>
-                      )}
-                      {d.id}
-                    </span>
+                    <span>Read the investigation</span>
                     <span>
                       Updated {formatDate(d.updatedAt)} <ArrowRight size={15} />
                     </span>
@@ -241,9 +232,11 @@ export default function HomePage() {
             {items.length === 0 && (
               <div className="empty-state">
                 <Search size={28} />
-                <h2>No discoveries match</h2>
-                <p>Try another field, stage, or search term.</p>
-                <button
+                <h2>{state.discoveries.length ? "No discoveries match" : "No discoveries available yet"}</h2>
+                <p>{state.discoveries.length
+                  ? "Try another field, stage, or search term."
+                  : "New investigations will appear here when they are available."}</p>
+                {state.discoveries.length > 0 && <button
                   className="btn btn-secondary"
                   onClick={() => {
                     setSelectedTab(null);
@@ -252,7 +245,7 @@ export default function HomePage() {
                   }}
                 >
                   Clear filters
-                </button>
+                </button>}
               </div>
             )}
           </div>
@@ -305,12 +298,6 @@ export default function HomePage() {
                 </small>
               </p>
             </div>
-            {state.discoveries.some((discovery) => discovery.illustrative) && (
-              <p className="sidebar-disclaimer">
-                “Illustrative example” entries are placeholders, not validated or
-                published research.
-              </p>
-            )}
           </section>
           <section className="reviewer-callout">
             <span className="small-icon">

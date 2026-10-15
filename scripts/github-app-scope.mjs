@@ -1,7 +1,7 @@
 const org = 'scida-science';
 const requiredRepositories = [
-  'scida-admin', 'discovery-ai-001', 'discovery-ai-002', 'discovery-ai-003',
-  'discovery-ast-001', 'discovery-ast-002', 'discovery-ast-003',
+  'scida-admin', 'GRB180411A_Dust_Echo', 'TOI475_Ephemeris_Discrepancy',
+  'TIC233166139_APOGEE_Mass_Ratio',
 ];
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const numericId = (value) => Number.isSafeInteger(value) && value > 0;
@@ -29,19 +29,19 @@ export function validateRepositories(repositories, selection) {
       !/^[A-Za-z0-9_.-]+$/.test(repository.name) || names.has(repository.name.toLowerCase()))
       fail('The installation must list unique repositories owned by scida-science.');
     names.add(repository.name.toLowerCase());
-    const relevant = repository.name === 'scida-admin' || repository.name.startsWith('discovery-');
+    const relevant = requiredRepositories.includes(repository.name) || repository.topics?.includes('scida-discovery') || repository.name.startsWith('discovery-');
     if (!relevant) {
       if (selection === 'all') continue;
-      fail('With Only select repositories, select only scida-admin and discovery-* repositories.');
+      fail('With Only select repositories, select only scida-admin and investigation repositories marked scida-discovery.');
     }
     if (repository.private !== true || repository.archived !== false || repository.disabled !== false ||
-      !(repository.name === 'scida-admin' || /^discovery-[a-z0-9][a-z0-9._-]*$/.test(repository.name)))
-      fail('Keep scida-admin and discovery-* repositories active and private.');
-    if (repository.name.startsWith('discovery-') && repository.has_issues !== true)
+      (repository.name.startsWith('discovery-') && !/^discovery-[a-z0-9][a-z0-9._-]*$/.test(repository.name)))
+      fail('Keep scida-admin and investigation repositories active and private.');
+    if (repository.name !== 'scida-admin' && repository.has_issues !== true)
       fail('Enable Issues on every discovery repository.');
     storageNames.push(repository.name);
   }
   if (requiredRepositories.some((name) => !storageNames.includes(name)))
-    fail('Allow access to scida-admin and all six existing discovery repositories before continuing.');
+    fail('Allow access to scida-admin and the three named astronomy investigation repositories before continuing.');
   return storageNames.sort();
 }

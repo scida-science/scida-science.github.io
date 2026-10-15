@@ -97,9 +97,9 @@ export default function App() {
       </header>
       {!configured && (
         <div className="notice configuration-notice" role="status">
-          <strong>Account services are not configured yet.</strong> You can
-          explore the six illustrative discoveries. Sign-in, discussions, and
-          requests become available after the research portal is connected.
+          <strong>The research portal is not connected.</strong> Research,
+          sign-in, discussions, and requests are unavailable until services are
+          configured.
         </div>
       )}
       {(error || accountError) && (

@@ -2,7 +2,7 @@ name: Build and deploy SciDA
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'content/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -40,19 +40,19 @@ jobs:
           VITE_SCIDA_API_URL: ${{ vars.VITE_SCIDA_API_URL }}
         run: |
           if [ -z "$VITE_SCIDA_API_URL" ]; then
-            echo "::warning::The GitHub backend is not configured. Public illustrative discoveries remain available; account services are unavailable."
+            echo "::warning::The GitHub backend is not configured. The portal shows an honest empty state; account services are unavailable."
           fi
           npm run build
       - name: Verify configured API before publishing
-        if: github.event_name != 'pull_request' && vars.VITE_SCIDA_API_URL != ''
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.VITE_SCIDA_API_URL != ''
         env:
           SCIDA_API_URL: ${{ vars.VITE_SCIDA_API_URL }}
         run: node scripts/verify-live.mjs --require-configured
       - name: Configure Pages
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
       - name: Upload website
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist

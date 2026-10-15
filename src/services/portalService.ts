@@ -1,4 +1,3 @@
-import { discoveries } from "../data/discoveries";
 import { ApiError, type ApiClient } from "../lib/api";
 import { existingPackageFile, verifyPackageFile, type PackageDirectory } from "../lib/reviewerPackage";
 import type {
@@ -75,9 +74,7 @@ export function createPortalService(
   const auth = dependencies.auth ?? (client ? createGitHubAuth(client) : null);
   const listeners = new Set<() => void>();
   let snapshot: PortalSnapshot = {
-    state: client
-      ? emptyPortalState()
-      : { ...emptyPortalState(), discoveries: structuredClone(discoveries) },
+    state: emptyPortalState(),
     user: null,
     configured: !!client,
     loading: !!client,

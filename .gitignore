@@ -15,3 +15,5 @@ coverage/
 *.dpapi
 *.dump
 *.sql.gz
+__pycache__/
+*.pyc
