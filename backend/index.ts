@@ -163,6 +163,8 @@ export async function handleRequest(
         let extra: Record<string, unknown> = {};
         if (path === "/v1/profile")
           await domain.saveProfile(userId, input.input);
+        else if (path === "/v1/notifications/read")
+          await domain.markNotificationsRead(userId, input.ids);
         else if (path === "/v1/applications")
           await domain.applyForReview(userId, input.topics, input.evidence);
         else if (

@@ -75,7 +75,7 @@ function noProtectedKeys(value) {
   if (Array.isArray(value)) return value.forEach(noProtectedKeys);
   if (!value || typeof value !== "object") return;
   for (const [key, child] of Object.entries(value)) {
-    assert(!/secret|token|password|privatekey|email|githublogin|sessions|exchanges|audit|assignedtopics|approvedtopics/i.test(key));
+    assert(!/secret|token|password|privatekey|email|githublogin|sessions|exchanges|audit|assignedtopics|approvedtopics|followedSince|readNotificationIds|followedDiscoveryIds/i.test(key));
     noProtectedKeys(child);
   }
 }
@@ -133,7 +133,8 @@ if (typeof configured === "boolean") {
       assert.equal(response.status, 200);
       exactKeys(body, ["state", "user"]);
       assert.equal(body.user, null);
-      exactKeys(body.state, ["profiles", "discoveries", "comments", "codeRequests", "applications", "invitations"]);
+      exactKeys(body.state, ["profiles", "discoveries", "comments", "codeRequests", "applications", "invitations", ...(body.state.notifications === undefined ? [] : ["notifications"])]);
+      if (body.state.notifications !== undefined) assert.deepEqual(body.state.notifications, []);
       for (const key of ["profiles", "codeRequests", "applications", "invitations"])
         assert.deepEqual(body.state[key], []);
       noProtectedKeys(body);
@@ -178,6 +179,16 @@ if (configured) {
       method: "POST",
       headers: { Origin: frontend, "Content-Type": "application/json" },
       body: "{}",
+    });
+    assert.equal(response.status, 401);
+    exactKeys(body, ["ok", "message"]);
+    assert.equal(body.ok, false);
+  });
+  await check("anonymous notification receipts are rejected without writes", async () => {
+    const { response, body } = await request("/v1/notifications/read", {
+      method: "POST",
+      headers: { Origin: frontend, "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: ["comment:AST-001:read-only-verification"] }),
     });
     assert.equal(response.status, 401);
     exactKeys(body, ["ok", "message"]);

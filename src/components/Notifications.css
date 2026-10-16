@@ -1,0 +1,67 @@
+.account-controls { position: relative; }
+.notification-bell { flex: 0 0 auto; }
+.notification-trigger {
+  position: relative; display: grid; place-items: center; width: 44px; height: 44px;
+  border: 1px solid transparent; border-radius: 5px; background: transparent; color: #41503f;
+}
+.notification-trigger:hover,
+.notification-trigger[aria-expanded="true"] { background: #f1f5ec; border-color: #dfe6d8; }
+.notification-badge {
+  position: absolute; top: 0; right: -1px; min-width: 17px; padding: 0 4px;
+  border: 2px solid white; border-radius: 12px; background: var(--green); color: white;
+  font-size: 10px; line-height: 17px; font-weight: 650;
+}
+.notification-panel,
+.notification-read-error {
+  position: absolute; z-index: 25; right: 0; top: calc(100% + 8px);
+  width: 390px; max-width: calc(100vw - 40px); border: 1px solid var(--border);
+  border-radius: 7px; box-shadow: 0 10px 30px #2037201a;
+}
+.notification-panel { background: white; max-height: min(75vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.notification-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px; }
+.notification-panel-heading h2 { font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: 0; margin: 0; }
+.notification-panel-heading .text-button { font-size: 11px; gap: 4px; white-space: nowrap; }
+.notification-list { margin: 0; padding: 0; list-style: none; }
+.notification-list > li { border-top: 1px solid #e8ece2; }
+.notification-item {
+  display: flex; gap: 12px; padding: 16px 17px; text-decoration: none; color: inherit;
+  border-left: 3px solid transparent; overflow-wrap: anywhere; align-items: flex-start;
+}
+.notification-item.is-unread { background: #f4f7ef; border-left-color: #68875c; }
+.notification-item:hover { background: #edf3e6; }
+.notification-item:focus-visible { outline-offset: -4px; }
+.notification-event-icon { margin-top: 4px; color: #62765d; }
+.notification-copy { display: grid; gap: 4px; flex: 1; min-width: 0; font-size: 13px; line-height: 1.55; }
+.notification-reason { color: #5b695d; font-size: 12px; }
+.notification-copy > strong { font-weight: 550; }
+.notification-meta { display: flex; flex-wrap: wrap; gap: 2px 9px; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.notification-meta > span { overflow-wrap: anywhere; }
+.notification-unread-dot { height: 6px; width: 6px; flex-shrink: 0; background: var(--green); border-radius: 50%; margin-top: 8px; }
+.notification-message { padding: 5px 20px 20px; font-size: 13px; color: var(--muted); margin: 0; }
+.notification-message.notice-error { padding: 12px 17px; }
+.notification-view-all { display: block; padding: 15px 20px; text-align: center; border-top: 1px solid var(--border); font-size: 12px; font-weight: 600; }
+.notification-read-error { padding: 13px; display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+.notification-read-error > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.notification-panel + .notification-read-error { position: fixed; right: 20px; top: auto; bottom: 20px; }
+.notifications-page { max-width: 820px; margin: 0 auto; }
+.notifications-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 18px 22px; }
+.notifications-toolbar > span { font-size: 13px; }
+.notifications-inbox { background: white; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.notifications-inbox > .notice { margin: 0 20px 18px; }
+.notifications-inbox > [role="status"] { margin: 0; padding: 20px; }
+.notifications-inbox .notification-item { padding: 20px 22px; }
+.notifications-inbox .notification-copy { font-size: 15px; }
+.notifications-inbox .notification-reason { font-size: 13px; }
+.notification-empty { padding: 34px 22px 42px; text-align: center; color: var(--muted); }
+.notification-empty h2 { margin: 13px 0 9px; font-size: 26px; }
+.notification-empty p { margin-bottom: 10px; font-size: 14px; }
+.discussion-comment[id] { scroll-margin-top: 24px; }
+.discussion-comment[id]:focus { outline: 2px solid #7b9e67; outline-offset: 5px; }
+@media (max-width: 560px) {
+  .notification-panel-heading { padding: 14px 12px; gap: 8px; }
+  .notification-item, .notifications-inbox .notification-item { padding: 15px 12px; gap: 9px; }
+  .notification-trigger { width: 40px; }
+  .notifications-inbox .notification-copy { font-size: 13px; }
+  .notifications-inbox .notification-reason { font-size: 12px; }
+  .notifications-toolbar { padding: 15px; }
+}

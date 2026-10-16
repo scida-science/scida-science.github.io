@@ -204,6 +204,16 @@ export function createPortalService(
       return repo.loadFigure(discoveryId, figureId);
     },
     refresh,
+    markNotificationsRead(ids: string[]): Promise<ActionResult> {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > 100 ||
+          new Set(ids).size !== ids.length ||
+          ids.some((id) => typeof id !== "string" || id.length < 1 || id.length > 256))
+        return Promise.resolve(fail("Choose the notifications to mark as read."));
+      return mutate(
+        (repository) => repository.markNotificationsRead(ids),
+        "Notifications marked as read.",
+      );
+    },
     setFollowing(discoveryId: string, following: boolean): Promise<ActionResult> {
       if (!/^[A-Za-z0-9_-]+$/.test(discoveryId) || typeof following !== "boolean")
         return Promise.resolve(fail("Choose a discovery to follow."));

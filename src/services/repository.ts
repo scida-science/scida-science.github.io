@@ -19,6 +19,7 @@ export function emptyPortalState(): PortalState {
     codeRequests: [],
     applications: [],
     invitations: [],
+    notifications: [],
   };
 }
 export interface PortalResponse {
@@ -64,12 +65,15 @@ export function createPortalRepository(client: ApiClient) {
         throw new Error(
           "The API returned private account data without an active session.",
         );
+      if (result.state.notifications !== undefined && !Array.isArray(result.state.notifications))
+        throw new Error("The SciDA API returned incomplete notification data.");
       return {
         ...result,
         user: result.user && canonicalServerProfile(result.user),
         state: {
           ...result.state,
           profiles: result.state.profiles.map(canonicalServerProfile),
+          notifications: result.user ? (result.state.notifications ?? []) : [],
           // Old illustrative repositories must not reappear in a real research feed.
           discoveries: result.state.discoveries.filter((discovery) => discovery.illustrative === false),
         },
@@ -79,6 +83,8 @@ export function createPortalRepository(client: ApiClient) {
       client.request<void>("/v1/profile", { input }),
     setFollowing: (discoveryId: string, following: boolean) =>
       client.request<void>(`/v1/discoveries/${encodeURIComponent(discoveryId)}/follow`, { following }),
+    markNotificationsRead: (ids: string[]) =>
+      client.request<void>("/v1/notifications/read", { ids }),
     applyForReview: (topics: TopicId[], evidence: string) =>
       client.request<void>("/v1/applications", { topics, evidence }),
     reviewApplication: (

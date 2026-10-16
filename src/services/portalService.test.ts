@@ -169,6 +169,73 @@ describe("Persisted discovery following", () => {
   });
 });
 
+describe("Private notification read state", () => {
+  const notification = {
+    id: "comment:AI-001:reply-1", kind: "reply" as const,
+    discoveryId: "AI-001", discoveryTitle: "Research investigation",
+    createdAt: "2026-10-16T08:00:00Z", commentId: "reply-1", read: false,
+  };
+  it("persists read receipts and reloads them from the API, without client-selected recipients", async () => {
+    const { service, routes } = setup();
+    let read = false;
+    const writes: unknown[] = [];
+    routes.set("/v1/portal", () => json({ state: { ...emptyPortalState(), notifications: [{ ...notification, read }] }, user: profile() }));
+    routes.set("/v1/notifications/read", (init) => {
+      writes.push(JSON.parse(init.body as string));
+      read = true;
+      return json({ ok: true });
+    });
+    await service.start();
+    expect(service.getSnapshot().state.notifications?.[0].read).toBe(false);
+    expect((await service.actions.markNotificationsRead([notification.id])).ok).toBe(true);
+    expect(writes).toEqual([{ ids: [notification.id] }]);
+    await service.actions.refresh();
+    expect(service.getSnapshot().state.notifications?.[0].read).toBe(true);
+  });
+  it("keeps unread state and reports a failed write", async () => {
+    const { service, routes } = setup();
+    routes.set("/v1/portal", () => json({ state: { ...emptyPortalState(), notifications: [notification] }, user: profile() }));
+    routes.set("/v1/notifications/read", () => json({ message: "GitHub storage unavailable." }, 503));
+    await service.start();
+    expect((await service.actions.markNotificationsRead([notification.id])).ok).toBe(false);
+    expect(service.getSnapshot().state.notifications?.[0].read).toBe(false);
+    expect(service.getSnapshot().error).toBe("GitHub storage unavailable.");
+  });
+  it("requires authentication and bounds receipts before sending a request", async () => {
+    const { service, fetcher } = setup({ signedIn: false });
+    await service.start();
+    for (const ids of [[notification.id], [], ["x".repeat(257)], [notification.id, notification.id], Array.from({ length: 101 }, (_, i) => `comment:AI-001:${i}`)])
+      expect((await service.actions.markNotificationsRead(ids)).ok).toBe(false);
+    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/notifications/read"))).toBe(false);
+  });
+  it("supports the previous API during deployment and strips any signed-out notifications", async () => {
+    const { service, routes } = setup({ signedIn: false });
+    const { notifications: _unused, ...legacyState } = emptyPortalState();
+    routes.set("/v1/portal", () => json({ state: legacyState, user: null }));
+    await service.start();
+    expect(service.getSnapshot().state.notifications).toEqual([]);
+    routes.set("/v1/portal", () => json({ state: { ...legacyState, notifications: [notification] }, user: null }));
+    await service.actions.refresh();
+    expect(service.getSnapshot().state.notifications).toEqual([]);
+  });
+  it("does not let an old account's read request restore private data after sign-out", async () => {
+    const { service, client, routes } = setup();
+    let complete!: (response: Response) => void;
+    routes.set("/v1/portal", (init) => new Headers(init.headers).has("Authorization")
+      ? json({ state: { ...emptyPortalState(), notifications: [notification] }, user: profile() })
+      : json({ state: emptyPortalState(), user: null }));
+    routes.set("/v1/notifications/read", () => new Promise((resolve) => { complete = resolve; }));
+    await service.start();
+    const pending = service.actions.markNotificationsRead([notification.id]);
+    await vi.waitFor(() => expect(complete).toBeTypeOf("function"));
+    client.clearSession();
+    complete(json({ ok: true }));
+    expect((await pending).ok).toBe(false);
+    await vi.waitFor(() => expect(service.getSnapshot().user).toBeNull());
+    expect(service.getSnapshot().state.notifications).toEqual([]);
+  });
+});
+
 describe("API configuration and sessions", () => {
   it("permits HTTPS and loopback API URLs without credential configuration", () => {
     expect(parseApiConfiguration("https://api.scida.example/").url).toBe(

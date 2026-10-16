@@ -11,18 +11,20 @@ import { ArrowRight, RefreshCw } from "lucide-react";
 import { usePortal } from "./state/PortalContext";
 import { Brand } from "./components/Ui";
 import AccountMenu from "./components/AccountMenu";
+import NotificationBell from "./components/NotificationBell";
 import HomePage from "./pages/HomePage";
 import DiscoveryPage from "./pages/DiscoveryPage";
 import ProfilePage from "./pages/ProfilePage";
 import AccessPage from "./pages/AccessPage";
 import AuthPage, { AuthCallbackPage } from "./pages/AuthPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 function RouteFocus() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
     document.getElementById("main-content")?.focus();
-    document.title = `${pathname.startsWith("/discoveries/") ? "Discovery" : pathname === "/profile" ? "Research profile" : pathname === "/access" ? "Reviewer access" : pathname === "/login" ? "Account" : pathname === "/following" ? "Following" : pathname === "/archive" ? "Archive" : "Explore"} · SciDA`;
+    document.title = `${pathname.startsWith("/discoveries/") ? "Discovery" : pathname === "/profile" ? "Research profile" : pathname === "/access" ? "Reviewer access" : pathname === "/login" ? "Account" : pathname === "/following" ? "Following" : pathname === "/archive" ? "Archive" : pathname === "/notifications" ? "Notifications" : "Explore"} · SciDA`;
   }, [pathname]);
   return null;
 }
@@ -67,6 +69,7 @@ export default function App() {
                 <RefreshCw size={17} />
               </button>
             )}
+            {user && <NotificationBell />}
             {user ? (
               <AccountMenu user={user} signingOut={signingOut}
                   onSignOut={async () => {
@@ -122,6 +125,7 @@ export default function App() {
           <Route path="/" element={<HomePage key="explore" />} />
           <Route path="/following" element={<HomePage key="following" followingOnly />} />
           <Route path="/archive" element={<HomePage key="archive" archiveOnly />} />
+          <Route path="/notifications" element={<NotificationsPage key={user?.id ?? "visitor"} />} />
           <Route
             path="/discoveries/:id"
             element={<DiscoveryPage key={user?.id ?? "visitor"} />}

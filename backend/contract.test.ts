@@ -181,6 +181,31 @@ it("requires a session to follow and derives preference ownership from it, never
   expect((await follow("200", { following: false, userId: "300" })).status).toBe(200);
   expect((await (await repository("200")).read()).user?.followedDiscoveryIds).toEqual([]);
 });
+it("stores notification reads only for the authenticated account and preserves them across new clients", async () => {
+  state.profiles["200"].followedDiscoveryIds = ["AI-001"];
+  comments.push({ id: "notice", discoveryId: "AI-001", authorId: "300", parentId: null,
+    version: records[0].document.discovery.version, reference: "", body: "New discussion evidence", createdAt: "2026-10-15T10:00:00Z" });
+  const read = (userId: string | null, body: unknown, origin = env.FRONTEND_ORIGIN) => handleRequest(
+    new Request(env.API_ORIGIN + "/v1/notifications/read", {
+      method: "POST", headers: { Origin: origin, "Content-Type": "application/json",
+        ...(userId ? { Authorization: "Bearer " + String(ids.indexOf(userId) + 1).repeat(43) } : {}) },
+      body: JSON.stringify(body),
+    }), env, store,
+  );
+  const input = { ids: ["comment:AI-001:notice"], userId: "300", profileId: "300", role: "Admin" };
+  expect((await read(null, input)).status).toBe(401);
+  expect((await read("200", input, "https://attacker.example")).status).toBe(403);
+  expect((await read("200", { ids: ["malformed"] })).status).toBe(400);
+  expect((await read("200", input)).status).toBe(200);
+  expect(state.profiles["200"].readNotificationIds).toEqual(input.ids);
+  expect(state.profiles["300"].readNotificationIds).toBeUndefined();
+  expect(state.access["200"].role).toBe("Reader");
+  const feed = await (await repository("200")).read();
+  expect(feed.state.notifications).toEqual(expect.arrayContaining([expect.objectContaining({ id: input.ids[0], read: true })]));
+  expect((await (await repository("300")).read()).state.notifications).toEqual([]);
+  expect((await (await repository(null)).read()).state.notifications).toEqual([]);
+});
+
 it("applies, approves within scope, and preserves Markdown in versioned threads through the real HTTP contract", async () => {
   const owner = await repository(env.ADMIN_GITHUB_ID),
     reader = await repository("200"),

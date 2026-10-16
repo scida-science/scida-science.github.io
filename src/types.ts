@@ -124,6 +124,18 @@ export interface Invitation {
   usedBy?: string;
   expiresAt?: string;
 }
+export interface PortalNotification {
+  id: string;
+  kind: "reply" | "discussion" | "discovery-update";
+  discoveryId: string;
+  discoveryTitle: string;
+  createdAt: string;
+  read: boolean;
+  commentId?: string;
+  version?: string;
+  actorName?: string;
+  status?: Stage;
+}
 export interface PortalState {
   profiles: Profile[];
   discoveries: Discovery[];
@@ -131,6 +143,8 @@ export interface PortalState {
   codeRequests: CodeRequest[];
   applications: ReviewerApplication[];
   invitations: Invitation[];
+  /** Private inbox for the current account; optional during backend rollout. */
+  notifications?: PortalNotification[];
 }
 export interface ActionResult {
   ok: boolean;

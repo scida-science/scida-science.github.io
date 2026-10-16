@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import Discussion from "./Discussion";
@@ -132,5 +132,41 @@ describe("Discussion submission recovery", () => {
     await act(async () => finish({ ok: true, message: "Discussion contribution saved." }));
     expect(screen.getByRole("status").textContent).toBe("Discussion contribution saved.");
     expect((screen.getByLabelText("Your comment") as HTMLTextAreaElement).value).toBe("");
+  });
+});
+
+describe("Notification discussion links", () => {
+  it("waits for comments, selects the actual older manuscript version, and focuses a reply once", async () => {
+    const scroll = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scroll });
+    portal.loading = true;
+    const view = () => <MemoryRouter initialEntries={["/discoveries/AST-001?comment=old-reply&version=incorrect"]}><Discussion discovery={discoveries[0]} /><button>Continue reading</button></MemoryRouter>;
+    const { rerender } = render(view());
+    expect(screen.queryByText(/linked discussion contribution could not be found/)).toBeNull();
+    portal = { ...portal, loading: false, state: { ...portal.state, comments: [
+      comment({ id: "old-root", version: "v0.1" }),
+      comment({ id: "old-reply", parentId: "old-root", version: "v0.1", body: "An earlier reply." }),
+      comment({ id: "current-root", body: "Current discussion." }),
+    ] } };
+    rerender(view());
+    const target = document.getElementById("comment-old-reply");
+    await waitFor(() => expect(document.activeElement).toBe(target));
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("v0.1");
+    expect(screen.queryByText("Current discussion.")).toBeNull();
+    expect(scroll).toHaveBeenCalledOnce();
+    const elsewhere = screen.getByRole("button", { name: "Continue reading" });
+    elsewhere.focus();
+    portal = { ...portal, state: { ...portal.state, comments: [...portal.state.comments] } };
+    rerender(view());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
+    expect(document.activeElement).toBe(elsewhere);
+    expect(scroll).toHaveBeenCalledOnce();
+  });
+
+  it("explains an unavailable link while preserving the discussion", () => {
+    portal.state.comments = [comment()];
+    render(<MemoryRouter initialEntries={["/discoveries/AST-001?comment=missing"]}><Discussion discovery={discoveries[0]} /></MemoryRouter>);
+    expect(screen.getByRole("status").textContent).toContain("The linked discussion contribution could not be found");
+    expect(screen.getByRole("article", { name: "Discussion contribution by Owner" })).toBeTruthy();
   });
 });

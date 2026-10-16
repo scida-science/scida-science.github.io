@@ -75,6 +75,7 @@ beforeEach(() => {
     updateDiscovery: success(),
     setAccess: success(),
     setFollowing: success(),
+    markNotificationsRead: success(),
   };
   vi.stubGlobal("scrollTo", vi.fn());
   vi.stubGlobal(

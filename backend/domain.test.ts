@@ -286,6 +286,77 @@ describe("private discovery following", () => {
   });
 });
 
+describe("private notification receipts and follow start times", () => {
+  it("persists the follow start, keeps repeat follows stable, and resets after unfollowing", async () => {
+    await domain.setFollowing(READER, "AI-001", true);
+    const started = store.state.profiles[READER].followedSince?.["AI-001"];
+    expect(Number.isFinite(Date.parse(started!))).toBe(true);
+    store.state.profiles[READER].followedSince!["AI-001"] = "2026-01-01T00:00:00.000Z";
+    await domain.setFollowing(READER, "AI-001", true);
+    expect(store.state.profiles[READER].followedSince?.["AI-001"]).toBe("2026-01-01T00:00:00.000Z");
+    await domain.setFollowing(READER, "AI-001", false);
+    expect(store.state.profiles[READER].followedSince).not.toHaveProperty("AI-001");
+    await domain.setFollowing(READER, "AI-001", true);
+    expect(store.state.profiles[READER].followedSince?.["AI-001"]).not.toBe("2026-01-01T00:00:00.000Z");
+    store.state.profiles[OTHER].followedDiscoveryIds = ["AI-001"];
+    await domain.setFollowing(OTHER, "AI-001", true);
+    expect(store.state.profiles[OTHER].followedSince).toEqual({});
+  });
+  it("projects only the viewer's notifications without additional reads or mutations", async () => {
+    store.state.profiles[READER].followedDiscoveryIds = ["AI-001"];
+    store.discussions["AI-001"] = [{ ...comment(), id: "notice", authorId: REVIEWER, createdAt: "2026-10-10T00:00:00.000Z" }];
+    const before = copy(store.state);
+    let commentReads = 0;
+    const original = store.readComments.bind(store);
+    store.readComments = async (record) => { commentReads++; return original(record); };
+    const result = await domain.portal(READER);
+    expect(result.state.notifications).toEqual(expect.arrayContaining([expect.objectContaining({ id: "comment:AI-001:notice", kind: "discussion", read: false })]));
+    expect(commentReads).toBe(store.records.length);
+    expect(store.state).toEqual(before);
+    expect(store.mutations).toBe(0);
+    expect((await domain.portal(null)).state.notifications).toEqual([]);
+    expect((await domain.portal(OTHER)).state.notifications).toEqual([]);
+    expect((await domain.portal(OWNER)).state.notifications).toEqual([]);
+  });
+  it("saves read receipts across fresh portal instances and merges concurrent receipts on retry", async () => {
+    store.state.profiles[READER].followedDiscoveryIds = ["AI-001"];
+    store.discussions["AI-001"] = [{ ...comment(), id: "notice", authorId: REVIEWER, createdAt: "2026-10-10T00:00:00.000Z" }];
+    store.conflict = (state) => { state.profiles[READER].readNotificationIds = ["comment:AI-001:concurrent"]; };
+    await domain.markNotificationsRead(READER, ["comment:AI-001:notice"]);
+    expect(store.state.profiles[READER].readNotificationIds).toEqual(["comment:AI-001:concurrent", "comment:AI-001:notice"]);
+    expect((await createDomain(store, OWNER, "https://api.example.test").portal(READER)).state.notifications)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: "comment:AI-001:notice", read: true })]));
+    expect(store.state.profiles[OTHER].readNotificationIds).toBeUndefined();
+  });
+  it("validates receipts, caps storage, and never mutates access", async () => {
+    const access = copy(store.state.access);
+    for (const invalid of [undefined, [], ["bad"], ["comment:AI-001:same", "comment:AI-001:same"], Array.from({ length: 101 }, (_, n) => `comment:AI-001:c${n}`)])
+      await denied(domain.markNotificationsRead(READER, invalid), 400);
+    await denied(domain.markNotificationsRead("99999", ["comment:AI-001:notice"]), 401);
+    expect(store.mutations).toBe(0);
+    store.state.profiles[READER].readNotificationIds = Array.from({ length: 1000 }, (_, n) => `comment:AI-001:c${n}`);
+    await domain.markNotificationsRead(READER, ["comment:AI-001:new"]);
+    expect(store.state.profiles[READER].readNotificationIds).toHaveLength(1000);
+    expect(store.state.profiles[READER].readNotificationIds?.at(-1)).toBe("comment:AI-001:new");
+    expect(store.state.access).toEqual(access);
+  });
+  it("keeps receipt metadata out of editable profiles and administrator profile projections", async () => {
+    const hidden = { followedSince: { "AI-001": "2026-01-01T00:00:00Z" }, readNotificationIds: ["comment:AI-001:notice"], notifications: [{ private: true }] };
+    Object.assign(store.state.profiles[READER], hidden);
+    await domain.saveProfile(READER, { ...profile("Edited"), ...hidden });
+    expect(store.state.profiles[READER].profile).toEqual(profile("Edited"));
+    Object.assign(store.state.profiles[READER].profile, hidden);
+    const owner = await domain.portal(OWNER);
+    const own = await domain.portal(READER);
+    for (const projected of [owner.state.profiles.find((item) => item.id === READER), own.user]) {
+      expect(projected).not.toHaveProperty("followedSince");
+      expect(projected).not.toHaveProperty("readNotificationIds");
+      expect(projected).not.toHaveProperty("notifications");
+    }
+    expect(store.state.profiles[READER].readNotificationIds).toEqual(hidden.readNotificationIds);
+  });
+});
+
 describe("server identity, profiles, and privacy", () => {
   it("starts with no seeded identities, sessions, comments, or approval decisions", () => {
     expect(emptyAdminState()).toEqual({

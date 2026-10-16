@@ -24,6 +24,10 @@ export interface ProfileRecord {
   email: string;
   /** Server-managed preference, separate from client-editable profile fields. */
   followedDiscoveryIds?: string[];
+  /** Private server-managed start time; absent for follows saved before notifications. */
+  followedSince?: Record<string, string>;
+  /** Bounded private read receipts; never part of the editable research profile. */
+  readNotificationIds?: string[];
 }
 export interface AccessRecord {
   role: Exclude<Role, "Admin">;

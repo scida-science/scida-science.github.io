@@ -22,7 +22,7 @@ beforeEach(() => {
   portal = {
     state: { discoveries: structuredClone(discoveries), profiles: [], comments: [], codeRequests: [], applications: [], invitations: [] },
     user: structuredClone(reader), configured: true, loading: false, error: null,
-    signInWithGitHub: success(), signOut: success(), refresh: success(), setFollowing: success(), saveProfile: success(),
+    signInWithGitHub: success(), signOut: success(), refresh: success(), setFollowing: success(), markNotificationsRead: success(), saveProfile: success(),
     applyForReview: success(), reviewApplication: success(), createInvitation: success(), previewInvitation: success(),
     confirmInvitation: success(), addComment: success(), requestCode: success(), updateDiscovery: success(), setAccess: success(),
     downloadMaterial: success(), downloadPackageFile: success(), loadFigure: vi.fn(),

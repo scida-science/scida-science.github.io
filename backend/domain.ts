@@ -19,6 +19,7 @@ import {
 } from "../src/services/validation";
 import { HttpError, materialKinds, object, validMaterial } from "./model";
 import { normalizeAccessRecord } from "./accessRoles";
+import { deriveNotifications, MAX_NOTIFICATIONS, MAX_READ_NOTIFICATION_IDS, readNotificationIds, validNotificationId } from "./notifications";
 import type {
   AdminState,
   AccessRecord,
@@ -146,7 +147,9 @@ export function createDomain(
         ? "Admin"
         : access.role;
     const result: Profile = {
-      ...clone(record.profile),
+      // Explicit fields also strip private notification preferences accidentally
+      // embedded in a legacy editable profile, even from administrator listings.
+      ...cleanProfile(record.profile),
       id: userId,
       githubLogin: record.githubLogin,
       email: record.email,
@@ -290,6 +293,7 @@ export function createDomain(
         codeRequests: [],
         applications: [],
         invitations: [],
+        notifications: [],
       };
       state.discoveries = readable
         .map((record) => {
@@ -374,6 +378,7 @@ export function createDomain(
         )
       ).flat();
       if (current) {
+        state.notifications = deriveNotifications(current.id, admin.profiles[current.id], state.discoveries, state.comments);
         state.applications = admin.applications
           .filter(
             (application) =>
@@ -432,13 +437,38 @@ export function createDomain(
       if (typeof following !== "boolean") bad("Choose whether to follow this discovery.");
       // Removing a saved preference remains possible after a discovery is removed.
       const record = following ? await discovery(discoveryId) : null;
+      const startedAt = iso();
       await store.updateAdmin((state) => {
         const current = user(state, userId);
         if (record) visible(current, record);
-        const saved = followedIds(state.profiles[current.id].followedDiscoveryIds);
-        state.profiles[current.id].followedDiscoveryIds = following
+        const profile = state.profiles[current.id];
+        const saved = followedIds(profile.followedDiscoveryIds);
+        const since = Object.fromEntries(saved.flatMap((id) =>
+          typeof profile.followedSince?.[id] === "string" && Number.isFinite(Date.parse(profile.followedSince[id]))
+            ? [[id, profile.followedSince[id]]] : [],
+        ));
+        if (following && !saved.includes(discoveryId as string)) since[discoveryId as string] = startedAt;
+        if (!following) delete since[discoveryId as string];
+        profile.followedSince = since;
+        profile.followedDiscoveryIds = following
           ? [...new Set([...saved, discoveryId as string])]
           : saved.filter((savedId) => savedId !== discoveryId);
+      });
+    },
+    async markNotificationsRead(userId: string, ids: unknown): Promise<void> {
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_NOTIFICATIONS ||
+          !ids.every(validNotificationId) || new Set(ids).size !== ids.length)
+        bad("Choose between 1 and 100 distinct notification IDs.");
+      const incoming = ids as string[];
+      await store.updateAdmin((state) => {
+        const current = user(state, userId);
+        const profile = state.profiles[current.id];
+        // IDs are bounded receipts, never selectors for accounts or permission
+        // records. Merge against the latest SHA-retried snapshot.
+        profile.readNotificationIds = [
+          ...readNotificationIds(profile.readNotificationIds).filter((id) => !incoming.includes(id)),
+          ...incoming,
+        ].slice(-MAX_READ_NOTIFICATION_IDS);
       });
     },
     async applyForReview(

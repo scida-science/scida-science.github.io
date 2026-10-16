@@ -144,6 +144,7 @@ try {
   assert.equal(archivedPublic.status, 'Withdrawn');
   assert.deepEqual(archivedPublic.statusHistory, archivedFixture.statusHistory);
   assert.equal(body.state.profiles.length, 0);
+  assert.deepEqual(body.state.notifications, []);
   assert.equal(portal.headers.get('Access-Control-Allow-Origin'), bindings.FRONTEND_ORIGIN);
   assert.deepEqual(unexpected, []);
   assert.ok(requests > 10, 'Portal must exercise real packaged GitHub transport');
@@ -192,6 +193,23 @@ try {
     discovery: { ...archivedPublic, status: 'Awaiting Validation', statusChangeReason: 'A Reader cannot restore this record.' },
   }, token)).status, 403, 'Readers cannot restore or alter an archived discovery');
   assert.equal((await post('/v1/access/200', { role: 'Senior Reviewer', assignedTopics: ['bandit-theory'], approvedTopics: [] }, token)).status, 403);
+  // Existing follow in isolated GitHub storage fixtures; no live accounts are used.
+  admin.profiles['200'].followedDiscoveryIds = [discoveries[0].id];
+  const inbox = await (await runtime.dispatchFetch(bindings.API_ORIGIN + '/v1/portal', {
+    headers: { Authorization: 'Bearer ' + token },
+  })).json();
+  assert.equal(inbox.state.notifications.length, 1);
+  const notification = inbox.state.notifications[0];
+  assert.equal(notification.kind, 'discovery-update');
+  assert.equal(notification.read, false);
+  assert.equal((await post('/v1/notifications/read', { ids: [notification.id] })).status, 401);
+  assert.equal((await post('/v1/notifications/read', { ids: [notification.id], userId: '999' }, token)).status, 200);
+  assert.deepEqual(admin.profiles['200'].readNotificationIds, [notification.id]);
+  const savedInbox = await (await runtime.dispatchFetch(bindings.API_ORIGIN + '/v1/portal', {
+    headers: { Authorization: 'Bearer ' + token },
+  })).json();
+  assert.equal(savedInbox.state.notifications[0].read, true);
+  assert.equal('readNotificationIds' in savedInbox.user, false);
   assert.equal(JSON.stringify(admin).includes('synthetic-github-user-token'), false, 'GitHub user tokens never persist');
   assert.equal(JSON.stringify(admin).includes(token), false, 'Only session hashes persist');
   assert.equal((await post('/auth/logout', {}, token)).status, 200);
@@ -208,7 +226,7 @@ try {
   assert.equal(failedPortal.status, 503, 'Storage redirects must fail closed');
   assert.equal((await failedPortal.text()).includes('redirect-must-not-be-followed'), false);
   assert.deepEqual(unexpected, [], 'Neither transport follows redirects to another host');
-  console.log('Packaged workerd runtime passed: App RSA JWT, GitHub transport, six discoveries including an archived record and its history, CORS, OAuth PKCE callback/exchange, Reader restrictions, session revocation, and redirect rejection. All GitHub responses were local fixtures.');
+  console.log('Packaged workerd runtime passed: App RSA JWT, GitHub transport, six discoveries including an archived record and its history, private notification receipts, CORS, OAuth PKCE callback/exchange, Reader restrictions, session revocation, and redirect rejection. All GitHub responses were local fixtures.');
 } finally {
   await runtime.dispose();
 }

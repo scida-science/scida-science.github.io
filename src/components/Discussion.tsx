@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState } from "react";
-import { Link } from "react-router-dom";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { CornerDownRight, MessageSquare, Send } from "lucide-react";
 import { usePortal } from "../state/PortalContext";
 import { canDiscuss } from "../services/permissions";
@@ -156,7 +156,7 @@ function CommentNode({
     "Researcher";
   const children = state.comments.filter((c) => c.parentId === comment.id);
   return (
-    <article className={`discussion-comment ${depth ? "is-reply" : ""}`}>
+    <article id={`comment-${comment.id}`} tabIndex={-1} aria-label={`Discussion contribution by ${authorName}`} className={`discussion-comment ${depth ? "is-reply" : ""}`}>
       <div className="comment-meta">
         <span className="avatar avatar-small">
           {authorName
@@ -207,8 +207,30 @@ function CommentNode({
 }
 export default function Discussion({ discovery }: { discovery: Discovery }) {
   const { state, user, configured, loading, error } = usePortal();
+  const location = useLocation();
   const [version, setVersion] = useState("all");
+  const focusedLink = useRef("");
+  const commentId = new URLSearchParams(location.search).get("comment");
   const comments = state.comments.filter((c) => c.discoveryId === discovery.id);
+  const linkedComment = commentId ? comments.find((comment) => comment.id === commentId) : undefined;
+  const linkKey = `${location.key}:${discovery.id}:${commentId ?? ""}`;
+  useEffect(() => {
+    if (!linkedComment || loading || error || focusedLink.current === linkKey) return;
+    // The stored contribution's version is authoritative, even if a notification
+    // contains an older or missing version hint.
+    if (version !== linkedComment.version) {
+      setVersion(linkedComment.version);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.getElementById(`comment-${linkedComment.id}`);
+      if (!element) return;
+      element.scrollIntoView({ block: "center", behavior: "auto" });
+      element.focus({ preventScroll: true });
+      focusedLink.current = linkKey;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [linkedComment, linkKey, version, loading, error]);
   const versions = Array.from(
     new Set([discovery.version, ...comments.map((c) => c.version)]),
   );
@@ -243,6 +265,9 @@ export default function Discussion({ discovery }: { discovery: Discovery }) {
           ))}
         </select>
       </label>
+      {commentId && !linkedComment && configured && !loading && !error && <p className="notice" role="status">
+        The linked discussion contribution could not be found. Other discussions are shown below.
+      </p>}
       {visible
         .filter((c) => !c.parentId)
         .map((c) => (
